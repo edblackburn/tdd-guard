@@ -25,6 +25,7 @@ import {
   createStorybookReporter,
   createRspecReporter,
   createMinitestReporter,
+  createDotnetReporter,
 } from './factories'
 
 // Test data structure for each reporter
@@ -45,6 +46,7 @@ type ReporterName =
   | 'storybook'
   | 'rspec'
   | 'minitest'
+  | 'dotnet'
 
 describe('Reporters', () => {
   const reporterData: ReporterTestData[] = []
@@ -61,6 +63,7 @@ describe('Reporters', () => {
       createStorybookReporter(),
       createRspecReporter(),
       createMinitestReporter(),
+      createDotnetReporter(),
     ]
 
     // Run all reporters in parallel, skipping any that fail (e.g., Rust not installed)
@@ -87,6 +90,7 @@ describe('Reporters', () => {
         { name: 'storybook', expected: 'single-passing.stories' },
         { name: 'rspec', expected: 'single_passing_spec.rb' },
         { name: 'minitest', expected: 'single_passing_test.rb' },
+        { name: 'dotnet', expected: 'CalculatorTests.cs' },
       ]
 
       it.each(reporters)('$name reports module path', ({ name, expected }) => {
@@ -106,6 +110,7 @@ describe('Reporters', () => {
         { name: 'storybook', expected: 'single-failing.stories' },
         { name: 'rspec', expected: 'single_failing_spec.rb' },
         { name: 'minitest', expected: 'single_failing_test.rb' },
+        { name: 'dotnet', expected: 'CalculatorTests.cs' },
       ]
 
       it.each(reporters)('$name reports module path', ({ name, expected }) => {
@@ -125,6 +130,7 @@ describe('Reporters', () => {
         { name: 'storybook', expected: 'single-import-error.stories' },
         { name: 'rspec', expected: 'single_import_error_spec.rb' },
         { name: 'minitest', expected: 'single_import_error_test.rb' },
+        { name: 'dotnet', expected: 'compilation' },
       ]
 
       it.each(reporters)('$name reports module path', ({ name, expected }) => {
@@ -155,6 +161,7 @@ describe('Reporters', () => {
         { name: 'storybook', expected: 'play-test' },
         { name: 'rspec', expected: 'should add numbers correctly' },
         { name: 'minitest', expected: 'test_should_add_numbers_correctly' },
+        { name: 'dotnet', expected: 'Should_add_numbers_correctly' },
       ]
 
       it.each(reporters)('$name reports test name', ({ name, expected }) => {
@@ -180,6 +187,7 @@ describe('Reporters', () => {
         { name: 'storybook', expected: 'play-test' },
         { name: 'rspec', expected: 'should add numbers correctly' },
         { name: 'minitest', expected: 'test_should_add_numbers_correctly' },
+        { name: 'dotnet', expected: 'Should_add_numbers_correctly' },
       ]
 
       it.each(reporters)('$name reports test name', ({ name, expected }) => {
@@ -211,6 +219,7 @@ describe('Reporters', () => {
           name: 'minitest',
           expected: 'LoadError: cannot load such file -- non_existent_module',
         },
+        { name: 'dotnet', expected: 'build' },
       ]
 
       it.each(reporters)(
@@ -262,6 +271,11 @@ describe('Reporters', () => {
           name: 'minitest',
           expected:
             'single_passing_test.rb::CalculatorTest#test_should_add_numbers_correctly',
+        },
+        {
+          name: 'dotnet',
+          expected:
+            'Calculator.Tests.CalculatorTests.1.1.Should_add_numbers_correctly.1.1.0',
         },
       ]
 
@@ -317,6 +331,11 @@ describe('Reporters', () => {
           expected:
             'single_failing_test.rb::CalculatorTest#test_should_add_numbers_correctly',
         },
+        {
+          name: 'dotnet',
+          expected:
+            'Calculator.Tests.CalculatorTests.1.1.Should_add_numbers_correctly.1.1.0',
+        },
       ]
 
       it.each(reporters)(
@@ -356,6 +375,7 @@ describe('Reporters', () => {
           expected:
             'single_import_error_test.rb::LoadError: cannot load such file -- non_existent_module',
         },
+        { name: 'dotnet', expected: 'compilation::build' },
       ]
 
       it.each(reporters)(
@@ -382,6 +402,7 @@ describe('Reporters', () => {
         'rust',
         'rspec',
         'minitest',
+        'dotnet',
       ]
 
       it.each(reporters)('%s reports passing state', (reporter) => {
@@ -404,6 +425,7 @@ describe('Reporters', () => {
         'storybook',
         'rspec',
         'minitest',
+        'dotnet',
       ]
 
       it.each(reporters)('%s reports failing state', (reporter) => {
@@ -429,6 +451,7 @@ describe('Reporters', () => {
         { name: 'storybook', expected: 'failed' },
         { name: 'rspec', expected: 'failed' },
         { name: 'minitest', expected: 'failed' },
+        { name: 'dotnet', expected: 'failed' },
       ]
 
       it.each(reporters)(
@@ -478,6 +501,7 @@ describe('Reporters', () => {
         },
         { name: 'rspec', expected: ['expected: 6', 'got: 5'] },
         { name: 'minitest', expected: ['Expected: 6', 'Actual: 5'] },
+        { name: 'dotnet', expected: ['Expected to be 6', 'but found 5'] },
       ]
 
       it.each(reporters)(
@@ -513,6 +537,7 @@ describe('Reporters', () => {
         { name: 'storybook', expected: undefined },
         { name: 'rspec', expected: undefined },
         { name: 'minitest', expected: undefined },
+        { name: 'dotnet', expected: undefined },
       ]
 
       it.each(reporters)(
@@ -538,6 +563,7 @@ describe('Reporters', () => {
         { name: 'storybook', expected: undefined },
         { name: 'rspec', expected: undefined },
         { name: 'minitest', expected: undefined },
+        { name: 'dotnet', expected: undefined },
       ]
 
       it.each(reporters)(
@@ -607,6 +633,10 @@ describe('Reporters', () => {
             'single_import_error_test.rb',
           ],
         },
+        {
+          name: 'dotnet',
+          expected: ['CS0246', 'NonExistent'],
+        },
       ]
 
       it.each(reporters)(
@@ -638,6 +668,7 @@ describe('Reporters', () => {
         { name: 'storybook', expected: 'passed' },
         { name: 'rspec', expected: 'passed' },
         { name: 'minitest', expected: 'passed' },
+        { name: 'dotnet', expected: 'passed' },
       ]
 
       it.each(reporters)(
@@ -663,6 +694,7 @@ describe('Reporters', () => {
         { name: 'storybook', expected: 'failed' },
         { name: 'rspec', expected: 'failed' },
         { name: 'minitest', expected: 'failed' },
+        { name: 'dotnet', expected: 'failed' },
       ]
 
       it.each(reporters)(
@@ -688,6 +720,7 @@ describe('Reporters', () => {
         { name: 'storybook', expected: 'failed' },
         { name: 'rspec', expected: 'failed' },
         { name: 'minitest', expected: 'failed' },
+        { name: 'dotnet', expected: 'failed' },
       ]
 
       it.each(reporters)(
@@ -741,6 +774,7 @@ describe('Reporters', () => {
     const storybook = reporterData.find((r) => r.name === 'StorybookReporter')
     const rspec = reporterData.find((r) => r.name === 'RSpecReporter')
     const minitest = reporterData.find((r) => r.name === 'MinitestReporter')
+    const dotnet = reporterData.find((r) => r.name === 'DotnetReporter')
 
     return {
       jest: safeExtract(jest?.[scenario], extractor),
@@ -752,6 +786,7 @@ describe('Reporters', () => {
       rspec: safeExtract(rspec?.[scenario], extractor),
       storybook: safeExtract(storybook?.[scenario], extractor),
       minitest: safeExtract(minitest?.[scenario], extractor),
+      dotnet: safeExtract(dotnet?.[scenario], extractor),
     }
   }
 
