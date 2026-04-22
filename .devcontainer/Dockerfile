@@ -164,6 +164,14 @@ RUN chown -R node:node /opt/rust && \
     curl -LsSf "${NEXTEST_URL}" | tar zxf - -C /opt/rust/cargo/bin && \
     chown node:node /opt/rust/cargo/bin/cargo-nextest
 
+# Install .NET SDK
+ARG DOTNET_VERSION=10.0
+RUN curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin \
+    --channel ${DOTNET_VERSION} --install-dir /usr/local/share/dotnet && \
+    ln -s /usr/local/share/dotnet/dotnet /usr/local/bin/dotnet
+ENV DOTNET_ROOT=/usr/local/share/dotnet
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
+
 RUN ARCH=$(dpkg --print-architecture) && \
   wget "https://github.com/dandavison/delta/releases/download/${GIT_DELTA_VERSION}/git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb" && \
   sudo dpkg -i "git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb" && \
