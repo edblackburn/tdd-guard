@@ -73,7 +73,12 @@ echo ""
 echo "🦀 Building Rust reporter..."
 cargo build --release --manifest-path reporters/rust/Cargo.toml || echo "⚠️  Rust reporter build failed (non-fatal)"
 
-# 9. Install Playwright browsers for Storybook test-runner
+# 9. Restore .NET dependencies for dotnet reporter
+echo ""
+echo "🔷 Restoring .NET dependencies..."
+dotnet restore reporters/dotnet
+
+# 10. Install Playwright browsers for Storybook test-runner
 echo ""
 echo "🎭 Installing Playwright browsers for Storybook test-runner..."
 npx playwright install chromium --only-shell
