@@ -31,9 +31,6 @@ internal static class TestJsonAssert
     internal static string FullName(this JsonElement test)
         => test.GetProperty("fullName").GetString()!;
 
-    internal static JsonElement Errors(this JsonElement test)
-        => test.GetProperty("errors");
-
     internal static bool HasErrors(this JsonElement test)
         => test.TryGetProperty("errors", out _);
 
