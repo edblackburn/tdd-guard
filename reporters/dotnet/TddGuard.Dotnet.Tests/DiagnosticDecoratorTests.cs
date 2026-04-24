@@ -52,4 +52,38 @@ internal sealed class DiagnosticDecoratorTests
 
         await Assert.That(captured).IsNull();
     }
+
+    [Test("LogOnError returns the error result unchanged")]
+    public async Task LogOnErrorReturnsErrorResultUnchanged()
+    {
+        OneOf<ProjectRoot, ResolveError> error = new ResolveError("bad");
+
+        var result = error.LogOnError(_ => { });
+
+        await Assert.That(result.IsT1).IsTrue();
+        await Assert.That(result.AsT1.Reason).IsEqualTo("bad");
+    }
+
+    [Test("LogOnError returns the success result unchanged")]
+    public async Task LogOnErrorReturnsSuccessResultUnchanged()
+    {
+        OneOf<ProjectRoot, ResolveError> success = new ProjectRoot("/valid");
+
+        var result = success.LogOnError(_ => { });
+
+        await Assert.That(result.IsT0).IsTrue();
+        await Assert.That(result.AsT0.Path).IsEqualTo("/valid");
+    }
+
+    [Test("WithDiagnostics returns the inner result unchanged")]
+    public async Task WithDiagnosticsReturnsInnerResult()
+    {
+        var expectedError = new WriteResult.Error("disk full");
+        WriteTestOutput inner = _ => expectedError;
+        var decorated = inner.WithDiagnostics(_ => { });
+
+        var result = decorated(new TestRunOutput([], "passed"));
+
+        await Assert.That(result).IsEqualTo(expectedError);
+    }
 }

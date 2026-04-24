@@ -48,12 +48,36 @@ internal sealed class ReportFileWriterTests
         });
     }
 
-    // --- helpers ---
+    [Test("overwrites existing test.json with new content")]
+    public async Task OverwritesExistingTestJson()
+    {
+        await TempDir.Run(async tempDir =>
+        {
+            var write = ReportFileWriter.Create(tempDir);
+
+            var firstOutput = MakeOutputWithReason("passed");
+            var firstResult = write(firstOutput);
+            await Assert.That(firstResult is WriteResult.Success).IsTrue();
+
+            var secondOutput = MakeOutputWithReason("failed");
+            var secondResult = write(secondOutput);
+            await Assert.That(secondResult is WriteResult.Success).IsTrue();
+
+            var expectedPath = Path.Combine(tempDir, ".claude", "tdd-guard", "data", "test.json");
+            var json = await File.ReadAllTextAsync(expectedPath);
+            await Assert.That(json).Contains("\"failed\"");
+            await Assert.That(json).DoesNotContain("\"passed\"");
+        });
+    }
 
     private static TestRunOutput MakePassingOutput()
+        => MakeOutputWithReason("passed");
+
+    private static TestRunOutput MakeOutputWithReason(string reason)
     {
-        var entry = new TestEntryOutput("test1", "Module/test1", "passed", null);
+        var state = reason == "failed" ? "failed" : "passed";
+        var entry = new TestEntryOutput("test1", "Module/test1", state, null);
         var module = new TestModuleOutput("Module", [entry]);
-        return new TestRunOutput([module], "passed");
+        return new TestRunOutput([module], reason);
     }
 }

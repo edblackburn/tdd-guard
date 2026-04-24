@@ -1,5 +1,4 @@
 using Microsoft.Testing.Platform.Extensions.Messages;
-using TddGuard.Dotnet.Core;
 using static TddGuard.Dotnet.Tests.MtpStubs;
 
 namespace TddGuard.Dotnet.Tests;
@@ -9,12 +8,13 @@ internal sealed class TddGuardListenerTests
     [Test("writes 'passed' reason for passing test")]
     public async Task WritesPassedReasonForPassingTest()
     {
-        await TestHarness.Run(
-            act: async listener =>
+        await ListenerFixture
+            .Arrange(async listener =>
             {
-                await listener.ConsumeAsync(StubProducer(), MakeTestUpdate("test1", new PassedTestNodeStateProperty()), default);
-            },
-            assert: async root =>
+                await listener.ConsumeAsync(StubProducer(), An.Event().Named("test1").Passed(), default);
+            })
+            .Act()
+            .Assert(async root =>
             {
                 await Assert.That(root.Reason()).IsEqualTo("passed");
             });
@@ -23,14 +23,14 @@ internal sealed class TddGuardListenerTests
     [Test("writes 'failed' reason when any test fails")]
     public async Task WritesFailedReasonWhenAnyTestFails()
     {
-        await TestHarness.Run(
-            act: async listener =>
+        await ListenerFixture
+            .Arrange(async listener =>
             {
-                await listener.ConsumeAsync(StubProducer(), MakeTestUpdate("test1", new PassedTestNodeStateProperty()), default);
-                var failedState = new FailedTestNodeStateProperty(new InvalidOperationException("boom"), "assertion failed");
-                await listener.ConsumeAsync(StubProducer(), MakeTestUpdate("test2", failedState), default);
-            },
-            assert: async root =>
+                await listener.ConsumeAsync(StubProducer(), An.Event().Named("test1").Passed(), default);
+                await listener.ConsumeAsync(StubProducer(), An.Event().Named("test2").Failed("boom"), default);
+            })
+            .Act()
+            .Assert(async root =>
             {
                 await Assert.That(root.Reason()).IsEqualTo("failed");
             });
@@ -39,12 +39,13 @@ internal sealed class TddGuardListenerTests
     [Test("skipped tests count as passed for reason")]
     public async Task SkippedTestsCountAsPassedForReason()
     {
-        await TestHarness.Run(
-            act: async listener =>
+        await ListenerFixture
+            .Arrange(async listener =>
             {
-                await listener.ConsumeAsync(StubProducer(), MakeTestUpdate("test1", new SkippedTestNodeStateProperty()), default);
-            },
-            assert: async root =>
+                await listener.ConsumeAsync(StubProducer(), An.Event().Named("test1").Skipped(), default);
+            })
+            .Act()
+            .Assert(async root =>
             {
                 await Assert.That(root.Reason()).IsEqualTo("passed");
                 await Assert.That(root.Module().Test().State()).IsEqualTo("skipped");
@@ -54,20 +55,22 @@ internal sealed class TddGuardListenerTests
     [Test("does not write when no tests run")]
     public async Task DoesNotWriteWhenNoTestsRun()
     {
-        await TestHarness.RunExpectingNoOutput(
-            act: _ => Task.CompletedTask);
+        await ListenerFixture
+            .Arrange()
+            .Act()
+            .AssertNoOutput();
     }
 
     [Test("includes error message from exception")]
     public async Task IncludesErrorMessageFromException()
     {
-        await TestHarness.Run(
-            act: async listener =>
+        await ListenerFixture
+            .Arrange(async listener =>
             {
-                var failedState = new FailedTestNodeStateProperty(new InvalidOperationException("Expected 6 but got 5"), "assertion failed");
-                await listener.ConsumeAsync(StubProducer(), MakeTestUpdate("test1", failedState), default);
-            },
-            assert: async root =>
+                await listener.ConsumeAsync(StubProducer(), An.Event().Named("test1").Failed("Expected 6 but got 5"), default);
+            })
+            .Act()
+            .Assert(async root =>
             {
                 var test = root.Module().Test();
                 await Assert.That(test.State()).IsEqualTo("failed");
@@ -78,13 +81,13 @@ internal sealed class TddGuardListenerTests
     [Test("uses explanation when no exception")]
     public async Task UsesExplanationWhenNoException()
     {
-        await TestHarness.Run(
-            act: async listener =>
+        await ListenerFixture
+            .Arrange(async listener =>
             {
-                var failedState = new FailedTestNodeStateProperty("assertion failed");
-                await listener.ConsumeAsync(StubProducer(), MakeTestUpdate("test1", failedState), default);
-            },
-            assert: async root =>
+                await listener.ConsumeAsync(StubProducer(), An.Event().Named("test1").FailedWithExplanation("assertion failed"), default);
+            })
+            .Act()
+            .Assert(async root =>
             {
                 await Assert.That(root.Module().Test().ErrorMessage()).IsEqualTo("assertion failed");
             });
@@ -93,12 +96,13 @@ internal sealed class TddGuardListenerTests
     [Test("passed test has no errors in JSON")]
     public async Task PassedTestHasNoErrorsInJson()
     {
-        await TestHarness.Run(
-            act: async listener =>
+        await ListenerFixture
+            .Arrange(async listener =>
             {
-                await listener.ConsumeAsync(StubProducer(), MakeTestUpdate("test1", new PassedTestNodeStateProperty()), default);
-            },
-            assert: async root =>
+                await listener.ConsumeAsync(StubProducer(), An.Event().Named("test1").Passed(), default);
+            })
+            .Act()
+            .Assert(async root =>
             {
                 await Assert.That(root.Module().Test().HasErrors()).IsFalse();
             });
@@ -107,12 +111,13 @@ internal sealed class TddGuardListenerTests
     [Test("uses file path as module ID")]
     public async Task UsesFilePathAsModuleId()
     {
-        await TestHarness.Run(
-            act: async listener =>
+        await ListenerFixture
+            .Arrange(async listener =>
             {
-                await listener.ConsumeAsync(StubProducer(), MakeTestUpdate("test1", new PassedTestNodeStateProperty(), filePath: "/src/Tests.cs"), default);
-            },
-            assert: async root =>
+                await listener.ConsumeAsync(StubProducer(), An.Event().Named("test1").InFile("/src/Tests.cs").Passed(), default);
+            })
+            .Act()
+            .Assert(async root =>
             {
                 await Assert.That(root.Module().ModuleId()).IsEqualTo("/src/Tests.cs");
             });
@@ -121,12 +126,13 @@ internal sealed class TddGuardListenerTests
     [Test("falls back to UID as module ID")]
     public async Task FallsBackToUidAsModuleId()
     {
-        await TestHarness.Run(
-            act: async listener =>
+        await ListenerFixture
+            .Arrange(async listener =>
             {
-                await listener.ConsumeAsync(StubProducer(), MakeTestUpdate("test1", new PassedTestNodeStateProperty(), filePath: null), default);
-            },
-            assert: async root =>
+                await listener.ConsumeAsync(StubProducer(), An.Event().Named("test1").WithNoFilePath().Passed(), default);
+            })
+            .Act()
+            .Assert(async root =>
             {
                 await Assert.That(root.Module().ModuleId()).Contains("assembly/TestClass/test1");
             });
@@ -135,8 +141,8 @@ internal sealed class TddGuardListenerTests
     [Test("strips parameters from UID")]
     public async Task StripsParametersFromUid()
     {
-        await TestHarness.Run(
-            act: async listener =>
+        await ListenerFixture
+            .Arrange(async listener =>
             {
                 var node = new TestNode
                 {
@@ -146,8 +152,9 @@ internal sealed class TddGuardListenerTests
                 };
                 var update = new TestNodeUpdateMessage(default, node);
                 await listener.ConsumeAsync(StubProducer(), update, default);
-            },
-            assert: async root =>
+            })
+            .Act()
+            .Assert(async root =>
             {
                 await Assert.That(root.Module().Test().FullName()).IsEqualTo("assembly/TestClass/TestMethod");
             });
@@ -156,12 +163,13 @@ internal sealed class TddGuardListenerTests
     [Test("uses display name as test name")]
     public async Task UsesDisplayNameAsTestName()
     {
-        await TestHarness.Run(
-            act: async listener =>
+        await ListenerFixture
+            .Arrange(async listener =>
             {
-                await listener.ConsumeAsync(StubProducer(), MakeTestUpdate("Should_add_numbers", new PassedTestNodeStateProperty()), default);
-            },
-            assert: async root =>
+                await listener.ConsumeAsync(StubProducer(), An.Event().Named("Should_add_numbers").Passed(), default);
+            })
+            .Act()
+            .Assert(async root =>
             {
                 await Assert.That(root.Module().Test().Name()).IsEqualTo("Should_add_numbers");
             });
@@ -170,33 +178,37 @@ internal sealed class TddGuardListenerTests
     [Test("ignores in-progress nodes")]
     public async Task IgnoresInProgressNodes()
     {
-        await TestHarness.RunExpectingNoOutput(
-            act: async listener =>
+        await ListenerFixture
+            .Arrange(async listener =>
             {
-                await listener.ConsumeAsync(StubProducer(), MakeTestUpdate("test1", new InProgressTestNodeStateProperty()), default);
-            });
+                await listener.ConsumeAsync(StubProducer(), An.Event().Named("test1").InProgress(), default);
+            })
+            .Act()
+            .AssertNoOutput();
     }
 
     [Test("ignores discovered nodes")]
     public async Task IgnoresDiscoveredNodes()
     {
-        await TestHarness.RunExpectingNoOutput(
-            act: async listener =>
+        await ListenerFixture
+            .Arrange(async listener =>
             {
-                await listener.ConsumeAsync(StubProducer(), MakeTestUpdate("test1", new DiscoveredTestNodeStateProperty()), default);
-            });
+                await listener.ConsumeAsync(StubProducer(), An.Event().Named("test1").Discovered(), default);
+            })
+            .Act()
+            .AssertNoOutput();
     }
 
     [Test("maps error state to failed")]
     public async Task MapsErrorStateToFailed()
     {
-        await TestHarness.Run(
-            act: async listener =>
+        await ListenerFixture
+            .Arrange(async listener =>
             {
-                var errorState = new ErrorTestNodeStateProperty(new InvalidOperationException("setup exploded"), "setup failed");
-                await listener.ConsumeAsync(StubProducer(), MakeTestUpdate("test1", errorState), default);
-            },
-            assert: async root =>
+                await listener.ConsumeAsync(StubProducer(), An.Event().Named("test1").Error("setup exploded"), default);
+            })
+            .Act()
+            .Assert(async root =>
             {
                 var test = root.Module().Test();
                 await Assert.That(test.State()).IsEqualTo("failed");
@@ -204,27 +216,74 @@ internal sealed class TddGuardListenerTests
             });
     }
 
+    [Test("ignores non-TestNodeUpdateMessage data")]
+    public async Task IgnoresNonTestNodeUpdateMessageData()
+    {
+        await ListenerFixture
+            .Arrange(async listener =>
+            {
+                var stubData = new MtpStubs.StubData("not a test update", null);
+                await listener.ConsumeAsync(StubProducer(), stubData, default);
+            })
+            .Act()
+            .AssertNoOutput();
+    }
+
+    [Test("failed with no exception and no explanation produces empty errors array")]
+    public async Task FailedWithNoExceptionNoExplanationProducesEmptyErrorsArray()
+    {
+        await ListenerFixture
+            .Arrange(async listener =>
+            {
+                await listener.ConsumeAsync(StubProducer(), An.Event().Named("test1").FailedBare(), default);
+            })
+            .Act()
+            .Assert(async root =>
+            {
+                var test = root.Module().Test();
+                await Assert.That(test.State()).IsEqualTo("failed");
+                await Assert.That(test.GetProperty("errors").GetArrayLength()).IsEqualTo(0);
+            });
+    }
+
+    [Test("error with no exception and no explanation produces empty errors array")]
+    public async Task ErrorWithNoExceptionNoExplanationProducesEmptyErrorsArray()
+    {
+        await ListenerFixture
+            .Arrange(async listener =>
+            {
+                await listener.ConsumeAsync(StubProducer(), An.Event().Named("test1").ErrorBare(), default);
+            })
+            .Act()
+            .Assert(async root =>
+            {
+                var test = root.Module().Test();
+                await Assert.That(test.State()).IsEqualTo("failed");
+                await Assert.That(test.GetProperty("errors").GetArrayLength()).IsEqualTo(0);
+            });
+    }
+
     [Test("clears results between sessions")]
     public async Task ClearsResultsBetweenSessions()
     {
-        var (listener, readJson, tempDir) = TestHarness.Create();
+        var (listener, readJson, tempDir) = ListenerFixture.Create();
         try
         {
-            // First session
+            // First session: one passing test produces output
             await listener.OnTestSessionStartingAsync(StubSessionContext());
-            await listener.ConsumeAsync(StubProducer(), MakeTestUpdate("test1", new PassedTestNodeStateProperty()), default);
+            await listener.ConsumeAsync(StubProducer(), An.Event().Named("test1").Passed(), default);
             await listener.OnTestSessionFinishingAsync(StubSessionContext());
 
-            await Assert.That(TestHarness.HasTestJson(tempDir)).IsTrue();
+            await Assert.That(ListenerFixture.HasTestJson(tempDir)).IsTrue();
 
             // Delete the file so we can detect whether session 2 writes
-            File.Delete(TestHarness.JsonPath(tempDir));
+            File.Delete(ListenerFixture.JsonPath(tempDir));
 
-            // Second session with no tests
+            // Second session: no tests, should not recreate file
             await listener.OnTestSessionStartingAsync(StubSessionContext());
             await listener.OnTestSessionFinishingAsync(StubSessionContext());
 
-            await Assert.That(TestHarness.HasTestJson(tempDir)).IsFalse();
+            await Assert.That(ListenerFixture.HasTestJson(tempDir)).IsFalse();
         }
         finally
         {
@@ -235,14 +294,15 @@ internal sealed class TddGuardListenerTests
     [Test("groups tests by module")]
     public async Task GroupsTestsByModule()
     {
-        await TestHarness.Run(
-            act: async listener =>
+        await ListenerFixture
+            .Arrange(async listener =>
             {
-                await listener.ConsumeAsync(StubProducer(), MakeTestUpdate("test1", new PassedTestNodeStateProperty(), filePath: "/src/ModuleA.cs"), default);
-                await listener.ConsumeAsync(StubProducer(), MakeTestUpdate("test2", new PassedTestNodeStateProperty(), filePath: "/src/ModuleB.cs"), default);
-                await listener.ConsumeAsync(StubProducer(), MakeTestUpdate("test3", new PassedTestNodeStateProperty(), filePath: "/src/ModuleA.cs"), default);
-            },
-            assert: async root =>
+                await listener.ConsumeAsync(StubProducer(), An.Event().Named("test1").InFile("/src/ModuleA.cs").Passed(), default);
+                await listener.ConsumeAsync(StubProducer(), An.Event().Named("test2").InFile("/src/ModuleB.cs").Passed(), default);
+                await listener.ConsumeAsync(StubProducer(), An.Event().Named("test3").InFile("/src/ModuleA.cs").Passed(), default);
+            })
+            .Act()
+            .Assert(async root =>
             {
                 var modules = root.GetProperty("testModules");
                 await Assert.That(modules.GetArrayLength()).IsEqualTo(2);
@@ -256,12 +316,13 @@ internal sealed class TddGuardListenerTests
     [Test("uses camelCase keys and omits nulls")]
     public async Task UsesCamelCaseKeysAndOmitsNulls()
     {
-        await TestHarness.Run(
-            act: async listener =>
+        await ListenerFixture
+            .Arrange(async listener =>
             {
-                await listener.ConsumeAsync(StubProducer(), MakeTestUpdate("test1", new PassedTestNodeStateProperty()), default);
-            },
-            assert: async root =>
+                await listener.ConsumeAsync(StubProducer(), An.Event().Named("test1").Passed(), default);
+            })
+            .Act()
+            .Assert(async root =>
             {
                 await Assert.That(root.TryGetProperty("testModules", out _)).IsTrue();
                 await Assert.That(root.TryGetProperty("TestModules", out _)).IsFalse();
@@ -277,13 +338,13 @@ internal sealed class TddGuardListenerTests
     [Test("escapes quotes in error messages")]
     public async Task EscapesQuotesInErrorMessages()
     {
-        await TestHarness.Run(
-            act: async listener =>
+        await ListenerFixture
+            .Arrange(async listener =>
             {
-                var failedState = new FailedTestNodeStateProperty(new InvalidOperationException("Expected \"hello\" but got \"world\""), "assertion");
-                await listener.ConsumeAsync(StubProducer(), MakeTestUpdate("test1", failedState), default);
-            },
-            assert: async root =>
+                await listener.ConsumeAsync(StubProducer(), An.Event().Named("test1").Failed("Expected \"hello\" but got \"world\""), default);
+            })
+            .Act()
+            .Assert(async root =>
             {
                 await Assert.That(root.Module().Test().ErrorMessage()).Contains("Expected \"hello\" but got \"world\"");
             });
@@ -292,13 +353,13 @@ internal sealed class TddGuardListenerTests
     [Test("escapes newlines in error messages")]
     public async Task EscapesNewlinesInErrorMessages()
     {
-        await TestHarness.Run(
-            act: async listener =>
+        await ListenerFixture
+            .Arrange(async listener =>
             {
-                var failedState = new FailedTestNodeStateProperty(new InvalidOperationException("line1\nline2\nline3"), "assertion");
-                await listener.ConsumeAsync(StubProducer(), MakeTestUpdate("test1", failedState), default);
-            },
-            assert: async root =>
+                await listener.ConsumeAsync(StubProducer(), An.Event().Named("test1").Failed("line1\nline2\nline3"), default);
+            })
+            .Act()
+            .Assert(async root =>
             {
                 await Assert.That(root.Module().Test().ErrorMessage()).Contains("line1\nline2\nline3");
             });
@@ -307,13 +368,13 @@ internal sealed class TddGuardListenerTests
     [Test("escapes backslashes in error messages")]
     public async Task EscapesBackslashesInErrorMessages()
     {
-        await TestHarness.Run(
-            act: async listener =>
+        await ListenerFixture
+            .Arrange(async listener =>
             {
-                var failedState = new FailedTestNodeStateProperty(new InvalidOperationException("path: C:\\Users\\test\\file.cs"), "assertion");
-                await listener.ConsumeAsync(StubProducer(), MakeTestUpdate("test1", failedState), default);
-            },
-            assert: async root =>
+                await listener.ConsumeAsync(StubProducer(), An.Event().Named("test1").Failed("path: C:\\Users\\test\\file.cs"), default);
+            })
+            .Act()
+            .Assert(async root =>
             {
                 await Assert.That(root.Module().Test().ErrorMessage()).Contains("C:\\Users\\test\\file.cs");
             });
@@ -322,7 +383,7 @@ internal sealed class TddGuardListenerTests
     [Test("handles concurrent ConsumeAsync calls safely")]
     public async Task HandlesConcurrentConsumeAsyncCallsSafely()
     {
-        var (listener, readJson, tempDir) = TestHarness.Create();
+        var (listener, readJson, tempDir) = ListenerFixture.Create();
         try
         {
             await listener.OnTestSessionStartingAsync(StubSessionContext());
@@ -333,7 +394,7 @@ internal sealed class TddGuardListenerTests
                 barrier.SignalAndWait();
                 await listener.ConsumeAsync(
                     StubProducer(),
-                    MakeTestUpdate($"Test_{i}", new PassedTestNodeStateProperty(), "/src/Tests.cs"),
+                    An.Event().Named($"Test_{i}").InFile("/src/Tests.cs").Passed(),
                     default);
             }));
             await Task.WhenAll(tasks);
@@ -343,6 +404,30 @@ internal sealed class TddGuardListenerTests
             var root = TestJsonAssert.Parse(readJson());
             var tests = root.Module().Tests();
             await Assert.That(tests.GetArrayLength()).IsEqualTo(100);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+        }
+    }
+
+    // Coverage: exercises IExtension property getters (lines 19-26) which are
+    // called by MTP framework via reflection but never by application code.
+    [Test("exposes correct IExtension metadata")]
+    public async Task ExposesCorrectExtensionMetadata()
+    {
+        var (listener, _, tempDir) = ListenerFixture.Create();
+        try
+        {
+            await Assert.That(listener.Uid).IsNotNull();
+            await Assert.That(listener.Version).IsNotNull();
+            await Assert.That(listener.DisplayName).IsNotNull();
+            await Assert.That(listener.Description).IsNotNull();
+
+            var enabled = await listener.IsEnabledAsync();
+            await Assert.That(enabled).IsTrue();
+
+            await Assert.That(listener.DataTypesConsumed).Contains(typeof(TestNodeUpdateMessage));
         }
         finally
         {
