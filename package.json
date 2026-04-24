@@ -1,6 +1,6 @@
 {
   "name": "tdd-guard",
-  "version": "1.6.3",
+  "version": "1.6.5",
   "description": "Automated Test-Driven Development enforcement for Claude Code",
   "author": "Nizar Selander",
   "license": "MIT",
@@ -65,10 +65,8 @@
     "@ast-grep/lang-ruby": "^0.0.7",
     "@ast-grep/lang-rust": "^0.0.7",
     "@ast-grep/napi": "^0.42.1",
-    "@types/uuid": "^10.0.0",
     "dotenv": "^17.2.3",
     "minimatch": "^10.0.3",
-    "uuid": "^13.0.0",
     "zod": "^4.3.6"
   },
   "lint-staged": {
@@ -103,6 +101,7 @@
   "overrides": {
     "@anthropic-ai/claude-agent-sdk": {
       "@anthropic-ai/sdk": "^0.82.0"
-    }
+    },
+    "uuid": "^14.0.0"
   }
 }

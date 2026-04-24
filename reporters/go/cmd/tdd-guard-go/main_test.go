@@ -2,9 +2,11 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/nizos/tdd-guard/reporters/go/internal/storage"
@@ -128,6 +130,85 @@ func TestProcess(t *testing.T) {
 
 			if output.String() != "" {
 				t.Errorf("Expected empty output for start event, got '%s'", output.String())
+			}
+		})
+
+		t.Run("preserves file location in race condition errors", func(t *testing.T) {
+			// Test that race condition errors don't lose file location info
+			input := `{"Action":"run","Package":"example.com/pkg","Test":"TestRace"}
+{"Action":"output","Package":"example.com/pkg","Test":"TestRace","Output":"=== RUN   TestRace\n"}
+{"Action":"output","Package":"example.com/pkg","Test":"TestRace","Output":"--- FAIL: TestRace (0.00s)\n"}
+{"Action":"output","Package":"example.com/pkg","Test":"TestRace","Output":"    race_test.go:25: race detected during execution of test\n"}
+{"Action":"fail","Package":"example.com/pkg","Test":"TestRace","Elapsed":0.00}
+{"Action":"fail","Package":"example.com/pkg","Elapsed":0.00}`
+			output := &bytes.Buffer{}
+
+			err := process(bytes.NewReader([]byte(input)), tempDir, output)
+			if err != nil {
+				t.Fatalf("Expected no error, got: %v", err)
+			}
+
+			outputStr := output.String()
+
+			// Should preserve file location even for race conditions
+			if !strings.Contains(outputStr, "race_test.go:25") {
+				t.Errorf("Expected file:line location for race condition to be preserved for AI parsing, got: %s", outputStr)
+			}
+		})
+
+		t.Run("preserves file location in truncated error messages", func(t *testing.T) {
+			// Test that very long error messages don't lose file location info when truncated
+			longError := "very long error message " + strings.Repeat("with lots of details ", 50) + "that continues"
+			input := fmt.Sprintf(`{"Action":"run","Package":"example.com/pkg","Test":"TestLongError"}
+{"Action":"output","Package":"example.com/pkg","Test":"TestLongError","Output":"=== RUN   TestLongError\n"}
+{"Action":"output","Package":"example.com/pkg","Test":"TestLongError","Output":"--- FAIL: TestLongError (0.00s)\n"}
+{"Action":"output","Package":"example.com/pkg","Test":"TestLongError","Output":"    long_test.go:42: %s\n"}
+{"Action":"fail","Package":"example.com/pkg","Test":"TestLongError","Elapsed":0.00}
+{"Action":"fail","Package":"example.com/pkg","Elapsed":0.00}`, longError)
+			output := &bytes.Buffer{}
+
+			err := process(bytes.NewReader([]byte(input)), tempDir, output)
+			if err != nil {
+				t.Fatalf("Expected no error, got: %v", err)
+			}
+
+			outputStr := output.String()
+
+			// Should preserve file location even when error message is truncated
+			if !strings.Contains(outputStr, "long_test.go:42") {
+				t.Errorf("Expected file:line location to be preserved even in truncated errors for AI parsing, got: %s", outputStr)
+			}
+		})
+
+		t.Run("shows error location for failing tests", func(t *testing.T) {
+			// This test demonstrates what AI needs to see for error location parsing
+			input := `{"Action":"run","Package":"example.com/pkg","Test":"TestSample"}
+{"Action":"output","Package":"example.com/pkg","Test":"TestSample","Output":"=== RUN   TestSample\n"}
+{"Action":"output","Package":"example.com/pkg","Test":"TestSample","Output":"--- FAIL: TestSample (0.00s)\n"}
+{"Action":"output","Package":"example.com/pkg","Test":"TestSample","Output":"    sample_test.go:15: Expected 42 but got 41\n"}
+{"Action":"fail","Package":"example.com/pkg","Test":"TestSample","Elapsed":0.00}
+{"Action":"fail","Package":"example.com/pkg","Elapsed":0.00}`
+			output := &bytes.Buffer{}
+
+			err := process(bytes.NewReader([]byte(input)), tempDir, output)
+			if err != nil {
+				t.Fatalf("Expected no error, got: %v", err)
+			}
+
+			outputStr := output.String()
+
+			// For AI error location parsing, we need:
+			// 1. The FAIL marker with test name and timing
+			if !strings.Contains(outputStr, "--- FAIL: TestSample (0.00s)") {
+				t.Errorf("Expected FAIL marker with timing for AI parsing, got: %s", outputStr)
+			}
+			// 2. The file:line error location
+			if !strings.Contains(outputStr, "sample_test.go:15: Expected 42 but got 41") {
+				t.Errorf("Expected file:line error location for AI parsing, got: %s", outputStr)
+			}
+			// 3. Test failure summary
+			if !strings.Contains(outputStr, "FAIL\texample.com/pkg/TestSample") {
+				t.Errorf("Expected test failure summary, got: %s", outputStr)
 			}
 		})
 	})

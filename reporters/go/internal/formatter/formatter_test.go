@@ -213,9 +213,20 @@ func TestFormatter(t *testing.T) {
 
 	t.Run("TestShowBuildFailEvents", func(t *testing.T) {
 		result := formatEvent(t, parser.TestEvent{Action: "build-fail"})
-		expected := "BUILD FAILED"
+		expected := "FAIL\t[build failed]"
 		if result != expected {
-			t.Fatalf("Expected '%s', got '%s'", expected, result)
+			t.Fatalf("Expected consistent FAIL format '%s', got '%s'", expected, result)
+		}
+	})
+
+	t.Run("TestShowBuildFailEventsWithPackage", func(t *testing.T) {
+		result := formatEvent(t, parser.TestEvent{
+			Action:  "build-fail",
+			Package: "example.com/pkg",
+		})
+		expected := "FAIL\texample.com/pkg [build failed]"
+		if result != expected {
+			t.Fatalf("Expected consistent FAIL format with package '%s', got '%s'", expected, result)
 		}
 	})
 
@@ -251,6 +262,34 @@ func TestFormatter(t *testing.T) {
 		expected := "unknown-action: data from unknown action"
 		if result != expected {
 			t.Fatalf("Expected '%s', got '%s'", expected, result)
+		}
+	})
+
+	t.Run("TestPreservesFailMarkersForErrorLocationVisibility", func(t *testing.T) {
+		// Test that --- FAIL: markers are preserved for better AI parsing
+		result := formatEvent(t, parser.TestEvent{
+			Action: "output",
+			Test:   "TestSample",
+			Output: "--- FAIL: TestSample (0.00s)\n",
+		})
+		// Should preserve the FAIL marker for AI error location visibility
+		expected := "--- FAIL: TestSample (0.00s)"
+		if result != expected {
+			t.Fatalf("Expected FAIL marker to be preserved for AI parsing. Expected '%s', got '%s'", expected, result)
+		}
+	})
+
+	t.Run("TestPreservesFileLocationInformation", func(t *testing.T) {
+		// Test that file:line:column information is always preserved
+		result := formatEvent(t, parser.TestEvent{
+			Action: "output",
+			Test:   "TestSample",
+			Output: "    sample_test.go:15: Expected 42 but got 41\n",
+		})
+		// Should preserve file location info for AI error identification
+		expected := "    sample_test.go:15: Expected 42 but got 41"
+		if result != expected {
+			t.Fatalf("Expected file location to be preserved for AI parsing. Expected '%s', got '%s'", expected, result)
 		}
 	})
 }

@@ -129,8 +129,11 @@ export class Config {
       return null
     }
 
-    // Validate that CLAUDE_PROJECT_DIR is an absolute path
-    if (!path.isAbsolute(projectDir)) {
+    // Validate that CLAUDE_PROJECT_DIR is an absolute path (POSIX or Windows)
+    if (
+      !path.posix.isAbsolute(projectDir) &&
+      !path.win32.isAbsolute(projectDir)
+    ) {
       throw new Error('CLAUDE_PROJECT_DIR must be an absolute path')
     }
 
@@ -140,8 +143,8 @@ export class Config {
     }
 
     // Validate that current working directory is within CLAUDE_PROJECT_DIR
-    const cwd = process.cwd()
-    if (!cwd.startsWith(projectDir)) {
+    const cwd = toComparablePath(process.cwd())
+    if (!cwd.startsWith(toComparablePath(projectDir))) {
       throw new Error(
         'CLAUDE_PROJECT_DIR must contain the current working directory'
       )
@@ -149,6 +152,11 @@ export class Config {
 
     return projectDir
   }
+}
+
+function toComparablePath(p: string): string {
+  const unified = p.replace(/^\/([a-zA-Z])(?=\/)/, '$1:').replace(/\\/g, '/')
+  return /^[a-zA-Z]:/.test(unified) ? unified.toLowerCase() : unified
 }
 
 function getClientType(options?: ConfigOptions): ClientType | undefined {

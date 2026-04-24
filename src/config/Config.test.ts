@@ -141,6 +141,32 @@ describe('Config', () => {
           'CLAUDE_PROJECT_DIR must not contain path traversal'
         )
       })
+
+      describe('Windows path forms', () => {
+        test('accepts MSYS-form env var with Windows-form cwd (Git Bash on Windows)', () => {
+          const claudeProjectDir = '/c/src/SampleProject'
+          process.env.CLAUDE_PROJECT_DIR = claudeProjectDir
+          process.cwd = () => 'c:\\src\\SampleProject'
+
+          const msysConfig = new Config()
+
+          expect(msysConfig.dataDir).toBe(
+            path.join(claudeProjectDir, DEFAULT_DATA_DIR)
+          )
+        })
+
+        test('accepts forward-slash Windows env var with different drive-letter case', () => {
+          const claudeProjectDir = 'C:/src/SampleProject'
+          process.env.CLAUDE_PROJECT_DIR = claudeProjectDir
+          process.cwd = () => 'c:\\src\\SampleProject'
+
+          const winConfig = new Config()
+
+          expect(winConfig.dataDir).toBe(
+            path.join(claudeProjectDir, DEFAULT_DATA_DIR)
+          )
+        })
+      })
     })
   })
 
