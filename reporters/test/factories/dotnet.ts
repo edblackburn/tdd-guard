@@ -1,9 +1,20 @@
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, realpathSync } from 'node:fs'
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  realpathSync,
+  existsSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { ReporterConfig, TestScenarios } from '../types'
 import { copyTestArtifacts } from './helpers'
+
+// Use hardcoded absolute path for security when available, fall back to PATH for CI environments
+const dotnetBinary = existsSync('/usr/local/bin/dotnet')
+  ? '/usr/local/bin/dotnet'
+  : 'dotnet'
 
 let nupkgsDir: string | null = null
 
@@ -19,14 +30,16 @@ function packNuGetPackages(): string {
   ]
 
   for (const project of projects) {
-    const dotnet = 'dotnet'
-    // eslint-disable-next-line sonarjs/no-os-command-from-path
-    const result = spawnSync(dotnet, ['pack', project, '--output', nupkgsDir], {
-      cwd: solutionDir,
-      stdio: 'pipe',
-      encoding: 'utf8',
-      timeout: 120000,
-    })
+    const result = spawnSync(
+      dotnetBinary,
+      ['pack', project, '--output', nupkgsDir],
+      {
+        cwd: solutionDir,
+        stdio: 'pipe',
+        encoding: 'utf8',
+        timeout: 120000,
+      }
+    )
     if (result.status !== 0) {
       throw new Error(`dotnet pack ${project} failed: ${result.stderr}`)
     }
@@ -60,8 +73,7 @@ export function runDotnetArtifact(tempDir: string): void {
     TDD_GUARD_PROJECT_ROOT: realpathSync(tempDir),
   }
 
-  // eslint-disable-next-line sonarjs/no-os-command-from-path
-  const buildResult = spawnSync('dotnet', ['build', tempDir], {
+  const buildResult = spawnSync(dotnetBinary, ['build', tempDir], {
     cwd: tempDir,
     stdio: 'pipe',
     encoding: 'utf8',
@@ -102,8 +114,7 @@ export function runDotnetArtifact(tempDir: string): void {
     return
   }
 
-  // eslint-disable-next-line sonarjs/no-os-command-from-path
-  spawnSync('dotnet', ['run', '--no-build', '--project', tempDir], {
+  spawnSync(dotnetBinary, ['run', '--no-build', '--project', tempDir], {
     cwd: tempDir,
     stdio: 'pipe',
     encoding: 'utf8',

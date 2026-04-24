@@ -73,6 +73,7 @@ Contributions are welcome! See the [contributing guidelines](CONTRIBUTING.md) to
 - Go support: [@sQVe](https://github.com/sQVe), [@wizzomafizzo](https://github.com/wizzomafizzo)
 - Storybook support: [@akornmeier](https://github.com/akornmeier)
 - Ruby/RSpec & Minitest support: [@Hiro-Chiba](https://github.com/Hiro-Chiba)
+- .NET/MTP support: [@edblackburn](https://github.com/edblackburn)
 
 ### Roadmap
 

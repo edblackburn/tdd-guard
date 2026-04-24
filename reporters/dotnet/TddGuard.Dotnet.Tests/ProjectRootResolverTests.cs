@@ -27,14 +27,14 @@ internal sealed class ProjectRootResolverTests
         await Assert.That(result.AsT0.Path).IsEqualTo(Path.GetFullPath(dir));
     }
 
-    [Test("falls back to working directory")]
-    public async Task FallsBackToWorkingDirectory()
+    [Test("returns error when neither env var is set (ADR-010)")]
+    public async Task ReturnsErrorWhenNeitherEnvVarIsSet()
     {
         var result = ProjectRootResolver.Resolve(
             _ => null,
             () => "/fallback/cwd");
-        await Assert.That(result.IsT0).IsTrue();
-        await Assert.That(result.AsT0.Path).IsEqualTo(Path.GetFullPath("/fallback/cwd"));
+        await Assert.That(result.IsT1).IsTrue();
+        await Assert.That(result.AsT1.Reason).Contains("TDD_GUARD_PROJECT_ROOT");
     }
 
     [Test("returns error when env var is empty string")]
@@ -126,5 +126,24 @@ internal sealed class ProjectRootResolverTests
             if (Directory.Exists(linkDir)) Directory.Delete(linkDir);
             if (Directory.Exists(realDir)) Directory.Delete(realDir, true);
         }
+    }
+
+    [Test("TDD_GUARD_PROJECT_ROOT takes precedence over CLAUDE_PROJECT_DIR")]
+    public async Task ProjectRootTakesPrecedenceOverClaudeProjectDir()
+    {
+        var preferred = Path.Combine(Path.GetTempPath(), "preferred");
+        var fallback = Path.Combine(Path.GetTempPath(), "fallback");
+
+        var result = ProjectRootResolver.Resolve(
+            name => name switch
+            {
+                "TDD_GUARD_PROJECT_ROOT" => preferred,
+                "CLAUDE_PROJECT_DIR" => fallback,
+                _ => null
+            },
+            () => preferred);
+
+        await Assert.That(result.IsT0).IsTrue();
+        await Assert.That(result.AsT0.Path).IsEqualTo(Path.GetFullPath(preferred));
     }
 }
