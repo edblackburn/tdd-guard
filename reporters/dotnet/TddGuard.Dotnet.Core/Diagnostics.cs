@@ -4,7 +4,7 @@ namespace TddGuard.Dotnet.Core;
 
 /// <summary>
 /// Decorators that add diagnostic logging to core operations.
-/// Composed at bootstrap time, not at definition time (PR-009).
+/// Composed at bootstrap time, not at definition time.
 /// </summary>
 public static class Diagnostics
 {

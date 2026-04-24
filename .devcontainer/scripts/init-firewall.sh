@@ -17,7 +17,7 @@
 #   - Go: proxy.golang.org, sum.golang.org, go.dev, storage.googleapis.com, honnef.co
 #   - Ruby: rubygems.org
 #   - Rust: crates.io, static.crates.io, index.crates.io
-#   - NuGet: api.nuget.org, azurewebsites.net (nuget feed)
+#   - NuGet: api.nuget.org
 # - Claude/Anthropic services: api.anthropic.com, sentry.io, statsig.com
 # - JetBrains plugin marketplace: plugins.jetbrains.com
 # - VS Code extension galleries: marketplace.visualstudio.com, github.gallerycdn.vsassets.io,

@@ -43,6 +43,8 @@ public sealed class TddGuardListener(WriteTestOutput writeOutput) : ITestSession
             return Task.CompletedTask;
 
         var node = update.TestNode;
+        // MTP fires Discovered during enumeration and InProgress when a test starts;
+        // we only collect terminal states (Passed, Failed, Skipped, Error).
         var stateProperty = node.Properties.SingleOrDefault<TestNodeStateProperty>();
         if (stateProperty is null or InProgressTestNodeStateProperty or DiscoveredTestNodeStateProperty)
             return Task.CompletedTask;

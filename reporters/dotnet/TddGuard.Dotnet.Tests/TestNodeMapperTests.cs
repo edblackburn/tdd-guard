@@ -28,12 +28,12 @@ internal sealed class TestNodeMapperTests
         await Assert.That(result.FullName).IsEqualTo(string.Empty);
     }
 
-    [Test("uses raw UID as module ID when file path is null")]
-    public async Task UsesRawUidAsModuleIdWhenFilePathNull()
+    [Test("uses stripped fullName as module ID when file path is null")]
+    public async Task UsesStrippedFullNameAsModuleIdWhenFilePathNull()
     {
         var input = new TestNodeInput("assembly/Class/Method(1)", "Method", null, new Core.TestState.Passed());
         var result = input.ToCollectedResult();
-        await Assert.That(result.ModuleId).IsEqualTo("assembly/Class/Method(1)");
+        await Assert.That(result.ModuleId).IsEqualTo("assembly/Class/Method");
         await Assert.That(result.FullName).IsEqualTo("assembly/Class/Method");
     }
 }
