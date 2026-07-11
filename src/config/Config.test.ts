@@ -168,6 +168,51 @@ describe('Config', () => {
         })
       })
     })
+
+    describe('cwd is itself a .claude directory', () => {
+      let originalCwd: typeof process.cwd
+
+      beforeEach(() => {
+        originalCwd = process.cwd
+      })
+
+      afterEach(() => {
+        process.cwd = originalCwd
+      })
+
+      test('walks up one level so .claude/tdd-guard/data is not doubled', () => {
+        process.cwd = () => '/repo/myapp/.claude'
+
+        const configInClaude = new Config()
+
+        expect(configInClaude.dataDir).toBe(
+          path.join('/repo/myapp', DEFAULT_DATA_DIR)
+        )
+      })
+
+      test('walks up when CLAUDE_PROJECT_DIR itself ends in .claude', () => {
+        process.env.CLAUDE_PROJECT_DIR = '/repo/myapp/.claude'
+        process.cwd = () => '/repo/myapp/.claude'
+
+        const configInClaude = new Config()
+
+        expect(configInClaude.dataDir).toBe(
+          path.join('/repo/myapp', DEFAULT_DATA_DIR)
+        )
+
+        delete process.env.CLAUDE_PROJECT_DIR
+      })
+
+      test('walks up when explicit projectRoot option ends in .claude', () => {
+        const configInClaude = new Config({
+          projectRoot: '/repo/myapp/.claude',
+        })
+
+        expect(configInClaude.dataDir).toBe(
+          path.join('/repo/myapp', DEFAULT_DATA_DIR)
+        )
+      })
+    })
   })
 
   describe('useSystemClaude', () => {
@@ -460,6 +505,10 @@ describe('Config', () => {
 
       expect(config.modelVersion).toBeDefined()
       expect(config.modelVersion).toBe(DEFAULT_MODEL_VERSION)
+    })
+
+    test('default model version is claude-sonnet-4-6', () => {
+      expect(DEFAULT_MODEL_VERSION).toBe('claude-sonnet-4-6')
     })
 
     test('can be set via options', () => {

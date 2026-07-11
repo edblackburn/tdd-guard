@@ -9,6 +9,7 @@
       "GIT_DELTA_VERSION": "0.18.2",
       "ZSH_IN_DOCKER_VERSION": "1.2.1",
       "GO_VERSION": "1.24.0",
+      "GOLANGCI_LINT_VERSION": "v2.3.1",
       "RUST_VERSION": "1.94.1",
       "RUBY_VERSION": "3.3.6",
       "DOTNET_VERSION": "10.0"

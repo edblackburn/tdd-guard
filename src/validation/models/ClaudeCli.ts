@@ -2,10 +2,10 @@ import { execFileSync } from 'child_process'
 import { join } from 'path'
 import { homedir } from 'os'
 import { existsSync, mkdirSync } from 'fs'
-import { IModelClient } from '../../contracts/types/ModelClient'
+import { ModelClient } from '../../contracts/types/ModelClient'
 import { Config } from '../../config/Config'
 
-export class ClaudeCli implements IModelClient {
+export class ClaudeCli implements ModelClient {
   private readonly config: Config
 
   constructor(config?: Config) {

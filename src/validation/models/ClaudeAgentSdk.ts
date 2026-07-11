@@ -1,9 +1,9 @@
 import { Config } from '../../config/Config'
 import { query, type Options } from '@anthropic-ai/claude-agent-sdk'
-import { IModelClient } from '../../contracts/types/ModelClient'
+import { ModelClient } from '../../contracts/types/ModelClient'
 import { SYSTEM_PROMPT } from '../prompts/system-prompt'
 
-export class ClaudeAgentSdk implements IModelClient {
+export class ClaudeAgentSdk implements ModelClient {
   constructor(
     private readonly config: Config = new Config(),
     private readonly queryFn: typeof query = query
@@ -19,9 +19,16 @@ export class ClaudeAgentSdk implements IModelClient {
       if (message.type !== 'result') continue
 
       if (message.subtype === 'success') {
+        if (message.is_error) {
+          throw new Error(message.result)
+        }
         return message.result
       }
-      throw new Error(`Claude Agent SDK error: ${message.subtype}`)
+      throw new Error(
+        message.errors.length
+          ? message.errors.join('; ')
+          : `Claude Agent SDK error: ${message.subtype}`
+      )
     }
 
     throw new Error('Claude Agent SDK error: No result message received')
@@ -45,17 +52,12 @@ export class ClaudeAgentSdk implements IModelClient {
         'Task',
         'TodoWrite',
       ],
-      maxThinkingTokens: 0,
+      thinking: { type: 'disabled' },
       model: this.config.modelVersion,
+      permissionMode: 'dontAsk',
       strictMcpConfig: true,
-      cwd: this.config.dataDir,
-      env: this.getCleanEnvironment(),
+      settingSources: [],
+      persistSession: false,
     }
-  }
-
-  private getCleanEnvironment(): Record<string, string | undefined> {
-    const environment = { ...process.env }
-    delete environment.CLAUDECODE
-    return environment
   }
 }

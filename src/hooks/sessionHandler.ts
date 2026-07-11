@@ -13,7 +13,7 @@ export class SessionHandler {
   async processSessionStart(hookData: string): Promise<void> {
     const parsedData = JSON.parse(hookData)
     const sessionStartResult = SessionStartSchema.safeParse(parsedData)
-    
+
     if (!sessionStartResult.success) {
       return
     }

@@ -7,6 +7,7 @@
     xsi:schemaLocation="https://getpsalm.org/schema/config vendor/vimeo/psalm/config.xsd"
     findUnusedBaselineEntry="true"
     findUnusedCode="false"
+    findUnusedIssueHandlerSuppression="false"
 >
     <projectFiles>
         <directory name="src" />
@@ -23,6 +24,15 @@
                 <directory name="tests" />
             </errorLevel>
         </PropertyNotSetInConstructor>
+
+        <!-- Tests instantiate PHPUnit's Event\Code classes directly to exercise
+             our handling of them. PHPUnit 12 marked these constructors @internal;
+             PHPUnit 11 did not. -->
+        <InternalMethod>
+            <errorLevel type="suppress">
+                <directory name="tests" />
+            </errorLevel>
+        </InternalMethod>
 
         <!-- PHPUnit 9.x compatibility - TestListener interface was removed in PHPUnit 10 -->
         <UndefinedClass>

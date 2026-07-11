@@ -6,19 +6,19 @@
 [![Security](https://github.com/nizos/tdd-guard/actions/workflows/security.yml/badge.svg)](https://github.com/nizos/tdd-guard/actions/workflows/security.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+> [!IMPORTANT]
+> **TDD Guard grew into [Probity](https://github.com/nizos/probity)**: the same
+> TDD enforcement, now for Claude Code, Codex, and GitHub Copilot CLI, with
+> more reliable validation and no test reporters to set up. New projects should
+> start there. TDD Guard remains maintained for the projects that rely on it.
+
 Automated Test-Driven Development enforcement for Claude Code.
 
-## Overview
+<p align="center">
+  <img src="docs/assets/tdd-guard-demo.gif" alt="TDD Guard blocking TDD violations" width="1200">
+</p>
 
 TDD Guard ensures Claude Code follows Test-Driven Development principles. When your agent tries to skip tests or over-implement, TDD Guard blocks the action and explains what needs to happen instead.
-
-<p align="center">
-  <a href="https://nizar.se/uploads/videos/tdd-guard-demo.mp4">
-    <img src="docs/assets/tdd-guard-demo-screenshot.gif" alt="TDD Guard Demo" width="600">
-  </a>
-  <br>
-  <em>Click to watch TDD Guard in action</em>
-</p>
 
 ## Features
 
@@ -74,13 +74,6 @@ Contributions are welcome! See the [contributing guidelines](CONTRIBUTING.md) to
 - Storybook support: [@akornmeier](https://github.com/akornmeier)
 - Ruby/RSpec & Minitest support: [@Hiro-Chiba](https://github.com/Hiro-Chiba)
 - .NET/MTP support: [@edblackburn](https://github.com/edblackburn)
-
-### Roadmap
-
-- Expand language and test framework support
-- Validate file modifications made through MCPs and shell commands
-- Encourage meaningful refactoring opportunities when tests are green
-- Add support for multiple concurrent sessions per project
 
 ## Support
 

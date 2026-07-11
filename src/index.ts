@@ -9,7 +9,7 @@ export type { ConfigOptions } from './contracts/types/ConfigOptions'
 
 // Contract exports - Types
 export type { Context } from './contracts/types/Context'
-export type { IModelClient } from './contracts/types/ModelClient'
+export type { ModelClient } from './contracts/types/ModelClient'
 export type { ValidationResult } from './contracts/types/ValidationResult'
 
 // Contract exports - Schemas

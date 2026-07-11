@@ -15,6 +15,7 @@ ARG COMPOSER_VERSION=2.8.10
 ARG GIT_DELTA_VERSION=0.18.2
 ARG ZSH_IN_DOCKER_VERSION=1.2.1
 ARG GO_VERSION=1.24.0
+ARG GOLANGCI_LINT_VERSION=v2.3.1
 
 # Install basic development tools and iptables/ipset
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -129,6 +130,15 @@ RUN ldconfig
 # Install RuboCop
 RUN gem install rubocop -v 1.86.0
 
+# Install JDK 17 for the JUnit5 reporter (Gradle toolchain target)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  openjdk-17-jdk-headless \
+  && apt-get clean && rm -rf /var/lib/apt/lists/* \
+  && ln -s /usr/lib/jvm/java-17-openjdk-$(dpkg --print-architecture) /opt/java-17
+
+ENV JAVA_HOME=/opt/java-17
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
+
 # Install Go
 RUN ARCH=$(dpkg --print-architecture) && \
     case ${ARCH} in \
@@ -146,7 +156,7 @@ ENV GOPATH="/home/node/go"
 ENV PATH="${GOPATH}/bin:${PATH}"
 
 # Install golangci-lint
-RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b /usr/local/go/bin latest
+RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/${GOLANGCI_LINT_VERSION}/install.sh | sh -s -- -b /usr/local/go/bin ${GOLANGCI_LINT_VERSION}
 
 # Install Rust
 ENV RUSTUP_HOME=/opt/rust/rustup

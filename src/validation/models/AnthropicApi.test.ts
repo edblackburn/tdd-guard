@@ -20,7 +20,7 @@ describe('AnthropicApi', () => {
     client = sut.client
   })
 
-  test('should implement IModelClient interface', () => {
+  test('should implement ModelClient interface', () => {
     expect(client.ask).toBeDefined()
   })
 

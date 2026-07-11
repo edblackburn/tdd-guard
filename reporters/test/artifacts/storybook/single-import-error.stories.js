@@ -1,8 +1,8 @@
-import { expect } from '@storybook/test'
+import { expect } from 'storybook/test'
 import { NonExistent } from './non-existent-module' // This module doesn't exist
 
 export default {
-  title: 'Calculator',
+  title: 'CalculatorImportError',
   render: () => null, // No UI component, just testing logic
 }
 

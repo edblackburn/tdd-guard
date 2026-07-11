@@ -1,11 +1,11 @@
 export const RESPONSE = `## Your Response
 
 ### Format
-Respond with a JSON object:
+Respond with a JSON object. Include "reason" only when blocking:
 \`\`\`json
 {
   "decision": "block" | null,
-  "reason": "Clear explanation with actionable next steps"
+  "reason": "Actionable explanation with next steps"
 }
 \`\`\`
 
@@ -21,19 +21,11 @@ When blocking, your reason must:
 3. **Provide the correct next step** (e.g., "Add only one test first")
 
 #### Example Block Reasons:
-- "Multiple test addition violation - adding 2 new tests simultaneously. Write and run only ONE test at a time to maintain TDD discipline."
+- "Multiple test addition violation - the new content adds 2 tests that were not in the old content. Write and run only ONE new test at a time to maintain TDD discipline."
 - "Over-implementation violation. Test output shows symbol is unresolved but implementation adds both class AND method. Create only an empty class first, then run test again."
 - "Refactoring without passing tests. Test output shows failures. Fix failing tests first, ensure all pass, then refactor."
 - "Premature implementation - adding new behavior without a failing test. Write the test first, run it to see the specific failure, then implement only what's needed to address that failure."
 - "No test output captured. Cannot validate TDD compliance without test results. Run tests using standard commands (npm test, pytest) without output filtering or redirection that may prevent the test reporter from capturing results."
-
-#### Example Approval Reasons:
-- "Adding single test to test file - follows TDD red phase"
-- "Minimal implementation addressing specific test failure"
-- "Stubbing impl (signature + minimal body) to surface a clean assertion — reaching Red, not Refactoring"
-- "Adding pure type declarations during refactor — no runtime behavior, no failing test needed"
-- "Extracting existing behavior into a new module — covered by existing tests, no net-new logic"
-- "Refactoring with evidence of passing tests"
 
 ### Focus
 Remember: You are ONLY evaluating TDD compliance, not:

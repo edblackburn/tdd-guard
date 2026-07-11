@@ -1,14 +1,14 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 import { ClaudeAgentSdk } from './ClaudeAgentSdk'
 import { Config } from '../../config/Config'
-import { IModelClient } from '../../contracts/types/ModelClient'
+import { ModelClient } from '../../contracts/types/ModelClient'
 import { query, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk'
 import { SYSTEM_PROMPT } from '../prompts/system-prompt'
 
 describe('ClaudeAgentSdk', () => {
   describe('constructor', () => {
-    test('implements the IModelClient interface', () => {
-      const client: IModelClient = new ClaudeAgentSdk()
+    test('implements the ModelClient interface', () => {
+      const client: ModelClient = new ClaudeAgentSdk()
       expect(client.ask).toBeDefined()
     })
 
@@ -79,8 +79,8 @@ describe('ClaudeAgentSdk', () => {
       expect(getUsedOptions().disallowedTools).toEqual(expectedDisallowedTools)
     })
 
-    test('sets maxThinkingTokens to 0', async () => {
-      expect(getUsedOptions().maxThinkingTokens).toBe(0)
+    test('disables thinking via the non-deprecated thinking option', async () => {
+      expect(getUsedOptions().thinking).toEqual({ type: 'disabled' })
     })
 
     test('uses model version from config', async () => {
@@ -95,34 +95,20 @@ describe('ClaudeAgentSdk', () => {
       expect(getUsedOptions().systemPrompt).toBe(SYSTEM_PROMPT)
     })
 
-    test('sets cwd to config dataDir', async () => {
-      // Prevents hook trigggers and keeps queries out of project history
-      expect(getUsedOptions().cwd).toBe(config.dataDir)
+    test('does not set cwd so isolation comes from settingSources and persistSession instead', async () => {
+      expect(getUsedOptions().cwd).toBeUndefined()
     })
 
-    test('passes env without CLAUDECODE to prevent nested session rejection', async () => {
-      process.env.CLAUDECODE = '1'
-
-      const freshSetup = setupClient(createSDKResultMessage(), config)
-      await freshSetup.client.ask(prompt)
-
-      expect(freshSetup.getUsedOptions().env).toBeDefined()
-      expect(freshSetup.getUsedOptions().env).not.toHaveProperty('CLAUDECODE')
+    test('sets persistSession to false to keep validation out of session history', async () => {
+      expect(getUsedOptions().persistSession).toBe(false)
     })
 
-    test('preserves other environment variables in env', async () => {
-      process.env.CLAUDECODE = '1'
-      process.env.SOME_OTHER_VAR = 'keep-me'
+    test('sets settingSources to empty so no filesystem settings or CLAUDE.md are loaded', async () => {
+      expect(getUsedOptions().settingSources).toEqual([])
+    })
 
-      const freshSetup = setupClient(createSDKResultMessage(), config)
-      await freshSetup.client.ask(prompt)
-
-      expect(freshSetup.getUsedOptions().env).toHaveProperty(
-        'SOME_OTHER_VAR',
-        'keep-me'
-      )
-
-      delete process.env.SOME_OTHER_VAR
+    test("sets permissionMode to 'dontAsk' so the non-interactive child denies instead of prompting", async () => {
+      expect(getUsedOptions().permissionMode).toBe('dontAsk')
     })
   })
 
@@ -134,7 +120,7 @@ describe('ClaudeAgentSdk', () => {
     })
 
     test('throws error when query returns error subtype', async () => {
-      const { client } = setupClient({ subtype: 'error_max_turns' })
+      const { client } = setupClient({ subtype: 'error_max_turns', errors: [] })
 
       await expect(client.ask('test')).rejects.toThrow(
         'Claude Agent SDK error: error_max_turns'
@@ -147,6 +133,25 @@ describe('ClaudeAgentSdk', () => {
       await expect(client.ask('test')).rejects.toThrow(
         'Claude Agent SDK error: No result message received'
       )
+    })
+
+    test('surfaces the API error text when a success result is flagged as an error', async () => {
+      const { client } = setupClient({
+        subtype: 'success',
+        is_error: true,
+        result: 'Credit balance too low',
+      })
+
+      await expect(client.ask('test')).rejects.toThrow('Credit balance too low')
+    })
+
+    test('surfaces the error details when the result subtype is an error', async () => {
+      const { client } = setupClient({
+        subtype: 'error_during_execution',
+        errors: ['session crashed'],
+      })
+
+      await expect(client.ask('test')).rejects.toThrow('session crashed')
     })
   })
 })

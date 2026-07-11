@@ -1,11 +1,11 @@
-import { IModelClient } from '../contracts/types/ModelClient'
+import { ModelClient } from '../contracts/types/ModelClient'
 import { Config } from '../config/Config'
 import { ClaudeCli } from '../validation/models/ClaudeCli'
 import { AnthropicApi } from '../validation/models/AnthropicApi'
 import { ClaudeAgentSdk } from '../validation/models/ClaudeAgentSdk'
 
 export class ModelClientProvider {
-  getModelClient(config?: Config): IModelClient {
+  getModelClient(config?: Config): ModelClient {
     const actualConfig = config ?? new Config()
 
     switch (actualConfig.validationClient) {

@@ -9,6 +9,6 @@ Use this to understand:
 - What error messages indicate about missing implementation
 - Whether tests are passing (indicating refactor phase may be appropriate)
 
-Note: Test output may be from unrelated features. This does NOT prevent starting new test-driven work.
+Note: Test output reflects PREVIOUS work and may be stale or from unrelated features. It does NOT prevent starting new test-driven work. In particular, passing (green) output does not restrict the change to refactoring. Adding ONE new test is always allowed.
 
 `

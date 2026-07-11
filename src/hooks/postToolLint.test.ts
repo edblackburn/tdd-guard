@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import { handlePostToolLint, PostToolLintHandler, DEFAULT_RESULT } from './postToolLint'
+import { handlePostToolLint, PostToolLintHandler } from './postToolLint'
+import { allow } from '../contracts/validationResults'
 import { testData } from '@testUtils'
 import { Linter } from '../linters/Linter'
 import { MemoryStorage } from '../storage/MemoryStorage'
@@ -33,13 +34,12 @@ describe('postToolLint', () => {
   it('should return default result for PreToolUse hooks', async () => {
     const { result, parsedLint } = await runLintAndGetResult({
       lintResult: testData.lintResultWithoutErrors(),
-      operation: { hook_event_name: 'PreToolUse' }
+      operation: { hook_event_name: 'PreToolUse' },
     })
 
-    expect(result).toEqual(DEFAULT_RESULT)
+    expect(result).toEqual(allow)
     expect(parsedLint).toBeNull()
   })
-
 
   describe('when processing tool operations', () => {
     it('runs lint and saves results for Edit operations', async () => {
@@ -53,7 +53,7 @@ describe('postToolLint', () => {
 
     it('runs lint and saves results for Write operations', async () => {
       const { parsedLint } = await runLintAndGetResult({
-        operation: { tool_name: 'Write' }
+        operation: { tool_name: 'Write' },
       })
 
       expect(parsedLint).not.toBeNull()
@@ -62,7 +62,7 @@ describe('postToolLint', () => {
 
     it('runs lint and saves results for MultiEdit operations', async () => {
       const { parsedLint } = await runLintAndGetResult({
-        operation: { tool_name: 'MultiEdit' }
+        operation: { tool_name: 'MultiEdit' },
       })
 
       expect(parsedLint).not.toBeNull()
@@ -73,11 +73,11 @@ describe('postToolLint', () => {
       const { result, parsedLint } = await runLintAndGetResult({
         operation: {
           tool_name: 'TodoWrite',
-          tool_input: { todos: [] }
-        }
+          tool_input: { todos: [] },
+        },
       })
 
-      expect(result).toEqual(DEFAULT_RESULT)
+      expect(result).toEqual(allow)
       expect(parsedLint).toBeNull()
     })
 
@@ -87,11 +87,11 @@ describe('postToolLint', () => {
           tool_name: 'MultiEdit',
           tool_input: {
             edits: [
-              { old_string: 'a', new_string: 'b' },  // missing file_path
-              { file_path: '/test/file.ts', old_string: 'c', new_string: 'd' }
-            ]
-          }
-        }
+              { old_string: 'a', new_string: 'b' }, // missing file_path
+              { file_path: '/test/file.ts', old_string: 'c', new_string: 'd' },
+            ],
+          },
+        },
       })
 
       // Should still process the edit that has a file_path
@@ -113,15 +113,15 @@ describe('postToolLint', () => {
     describe('and notification flag is false', () => {
       it('does not block the operation', async () => {
         const { result } = await runLintAndGetResult({
-          lintResult: testData.lintResultWithError()
+          lintResult: testData.lintResultWithError(),
         })
 
-        expect(result).toEqual(DEFAULT_RESULT)
+        expect(result).toEqual(allow)
       })
 
       it('saves hasNotifiedAboutLintIssues as false', async () => {
         const { parsedLint } = await runLintAndGetResult({
-          lintResult: testData.lintResultWithError()
+          lintResult: testData.lintResultWithError(),
         })
 
         expect(parsedLint!.hasNotifiedAboutLintIssues).toBe(false)
@@ -132,7 +132,7 @@ describe('postToolLint', () => {
       it('blocks with detailed lint errors', async () => {
         const { result } = await runLintAndGetResult({
           lintResult: testData.lintResultWithError(),
-          initialLintData: testData.lintDataWithNotificationFlag()
+          initialLintData: testData.lintDataWithNotificationFlag(),
         })
 
         expect(result.decision).toBe('block')
@@ -142,7 +142,7 @@ describe('postToolLint', () => {
       it('preserves the notification flag', async () => {
         const { parsedLint } = await runLintAndGetResult({
           lintResult: testData.lintResultWithError(),
-          initialLintData: testData.lintDataWithNotificationFlag()
+          initialLintData: testData.lintDataWithNotificationFlag(),
         })
 
         expect(parsedLint!.hasNotifiedAboutLintIssues).toBe(true)
@@ -152,10 +152,10 @@ describe('postToolLint', () => {
     describe('and tests are failing (red phase)', () => {
       it('saves lint data without blocking', async () => {
         const lintData = testData.lintResultWithError()
-        
+
         const { parsedLint } = await runLintAndGetResult({
           lintResult: lintData,
-          initialTestData: testData.failedTestResults()
+          initialTestData: testData.failedTestResults(),
         })
 
         expect(parsedLint!.issues).toEqual(lintData.issues)
@@ -170,20 +170,20 @@ describe('postToolLint', () => {
       // This test requires manual setup to spy on storage
       const storage = new MemoryStorage()
       const testLinter = new TestLinter(testData.lintResultWithoutErrors())
-      
+
       // Make storage.getLint() throw an error only on the first call
       const getLintSpy = vi.spyOn(storage, 'getLint')
       getLintSpy.mockRejectedValueOnce(new Error('Storage error'))
 
       const hookData = JSON.stringify({
         ...testData.editOperation(),
-        hook_event_name: 'PostToolUse'
+        hook_event_name: 'PostToolUse',
       })
-      
+
       const result = await handlePostToolLint(hookData, storage, testLinter)
 
       // Should not block (treats error as no stored data)
-      expect(result).toEqual(DEFAULT_RESULT)
+      expect(result).toEqual(allow)
 
       // Reset the spy and check that storage now contains the new lint data
       getLintSpy.mockRestore()
@@ -201,12 +201,12 @@ describe('postToolLint', () => {
       const handler = new PostToolLintHandler(storage, null)
       const hookData = {
         ...testData.editOperation(),
-        hook_event_name: 'PostToolUse'
+        hook_event_name: 'PostToolUse',
       }
 
       const result = await handler.handle(JSON.stringify(hookData))
 
-      expect(result).toEqual(DEFAULT_RESULT)
+      expect(result).toEqual(allow)
       const savedLint = await storage.getLint()
       expect(savedLint).toBeNull()
     })
@@ -217,7 +217,7 @@ describe('postToolLint', () => {
       it('resets hasNotifiedAboutLintIssues to false', async () => {
         const { parsedLint } = await runLintAndGetResult({
           lintResult: testData.lintResultWithoutErrors(),
-          initialLintData: testData.lintDataWithNotificationFlag()
+          initialLintData: testData.lintDataWithNotificationFlag(),
         })
 
         expect(parsedLint!.hasNotifiedAboutLintIssues).toBe(false)
@@ -228,10 +228,10 @@ describe('postToolLint', () => {
           const { result } = await runLintAndGetResult({
             lintResult: testData.lintResultWithoutErrors(),
             initialLintData: testData.lintDataWithNotificationFlag(),
-            initialTestData: testData.passingTestResults()
+            initialTestData: testData.passingTestResults(),
           })
 
-          expect(result).toEqual(DEFAULT_RESULT)
+          expect(result).toEqual(allow)
         })
       })
     })
@@ -242,9 +242,16 @@ describe('postToolLint', () => {
           lintResult: testData.lintResultWithoutErrors(),
           initialLintData: testData.lintData({
             files: ['/src/example.ts'],
-            issues: [testData.lintIssue({ file: '/src/example.ts', line: 1, column: 1, message: "Error" })],
-            hasNotifiedAboutLintIssues: true
-          })
+            issues: [
+              testData.lintIssue({
+                file: '/src/example.ts',
+                line: 1,
+                column: 1,
+                message: 'Error',
+              }),
+            ],
+            hasNotifiedAboutLintIssues: true,
+          }),
         })
 
         expect(parsedLint!.hasNotifiedAboutLintIssues).toBe(false)
@@ -253,7 +260,7 @@ describe('postToolLint', () => {
 
     it('saves clean lint data', async () => {
       const { parsedLint } = await runLintAndGetResult({
-        lintResult: testData.lintResultWithoutErrors()
+        lintResult: testData.lintResultWithoutErrors(),
       })
 
       expect(parsedLint!.issues).toEqual([])
@@ -273,13 +280,19 @@ interface LintTestOptions {
 }
 
 async function runLintAndGetResult(options: LintTestOptions = {}): Promise<{
-  result: ValidationResult,
-  parsedLint: LintData | null,
+  result: ValidationResult
+  parsedLint: LintData | null
   storage: MemoryStorage
 }> {
-  const { lintResult, operation = {}, storage: existingStorage, initialLintData, initialTestData } = options
+  const {
+    lintResult,
+    operation = {},
+    storage: existingStorage,
+    initialLintData,
+    initialTestData,
+  } = options
   const storage = existingStorage ?? new MemoryStorage()
-  
+
   // Set up initial storage state if provided
   if (initialLintData) {
     await storage.saveLint(JSON.stringify(initialLintData))
@@ -287,9 +300,11 @@ async function runLintAndGetResult(options: LintTestOptions = {}): Promise<{
   if (initialTestData) {
     await storage.saveTest(JSON.stringify(initialTestData))
   }
-  
-  const testLinter = new TestLinter(lintResult ?? testData.lintResultWithoutErrors())
-  
+
+  const testLinter = new TestLinter(
+    lintResult ?? testData.lintResultWithoutErrors()
+  )
+
   let baseOperation
   if (operation.tool_name === 'Write') {
     baseOperation = testData.writeOperation()
@@ -298,29 +313,29 @@ async function runLintAndGetResult(options: LintTestOptions = {}): Promise<{
   } else {
     baseOperation = testData.editOperation()
   }
-  
+
   const hookData = JSON.stringify({
     ...baseOperation,
     hook_event_name: 'PostToolUse',
-    ...operation
+    ...operation,
   })
-  
+
   const result = await handlePostToolLint(hookData, storage, testLinter)
-  
+
   const savedLint = await storage.getLint()
   const parsedLint = savedLint ? JSON.parse(savedLint) : null
-  
+
   return { result, parsedLint, storage }
 }
 
 // Test Linter implementation with configurable behavior
 class TestLinter implements Linter {
   private readonly lintResult: LintResult
-  
+
   constructor(lintResult?: LintResult) {
     this.lintResult = lintResult ?? testData.lintResultWithoutErrors()
   }
-  
+
   async lint(): Promise<LintResult> {
     return this.lintResult
   }

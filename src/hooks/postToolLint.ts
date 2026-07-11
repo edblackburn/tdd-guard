@@ -1,13 +1,13 @@
 import { ValidationResult } from '../contracts/types/ValidationResult'
 import { HookData, HookDataSchema } from '../contracts/schemas/toolSchemas'
-import { LintData, LintDataSchema, LintResult } from '../contracts/schemas/lintSchemas'
+import {
+  LintData,
+  LintDataSchema,
+  LintResult,
+} from '../contracts/schemas/lintSchemas'
 import { Storage } from '../storage/Storage'
 import { Linter } from '../linters/Linter'
-
-export const DEFAULT_RESULT: ValidationResult = {
-  decision: undefined,
-  reason: ''
-}
+import { allow, block } from '../contracts/validationResults'
 
 export class PostToolLintHandler {
   private readonly linter: Linter | null
@@ -21,7 +21,7 @@ export class PostToolLintHandler {
   async handle(hookData: string): Promise<ValidationResult> {
     // If no linter is configured, skip linting
     if (!this.linter) {
-      return DEFAULT_RESULT
+      return allow
     }
     return handlePostToolLint(hookData, this.storage, this.linter)
   }
@@ -31,16 +31,16 @@ function parseAndValidateHookData(hookData: string): HookData | null {
   try {
     const parsedData = JSON.parse(hookData)
     const hookResult = HookDataSchema.safeParse(parsedData)
-    
+
     if (!hookResult.success) {
       return null
     }
-    
+
     // Only process PostToolUse hooks
     if (hookResult.data.hook_event_name !== 'PostToolUse') {
       return null
     }
-    
+
     return hookResult.data
   } catch {
     return null
@@ -64,43 +64,44 @@ function createLintData(
   storedLintData: LintData | null
 ): LintData {
   const hasIssues = lintResults.errorCount > 0 || lintResults.warningCount > 0
-  
+
   return {
     ...lintResults,
-    hasNotifiedAboutLintIssues: hasIssues 
-      ? (storedLintData?.hasNotifiedAboutLintIssues ?? false)  // Preserve flag when issues exist
-      : false  // Reset flag when no issues
+    hasNotifiedAboutLintIssues: hasIssues
+      ? (storedLintData?.hasNotifiedAboutLintIssues ?? false) // Preserve flag when issues exist
+      : false, // Reset flag when no issues
   }
 }
 
 function createBlockResult(lintData: LintData): ValidationResult {
   const formattedIssues = formatLintIssues(lintData.issues)
   const summary = `\n✖ ${lintData.errorCount + lintData.warningCount} problems (${lintData.errorCount} errors, ${lintData.warningCount} warnings)`
-  
-  return {
-    decision: 'block',
-    reason: `Lint issues detected:${formattedIssues}\n${summary}\n\nPlease fix these issues before proceeding.`
-  }
+
+  return block(
+    `Lint issues detected:${formattedIssues}\n${summary}\n\nPlease fix these issues before proceeding.`
+  )
 }
 
 function formatLintIssues(issues: LintData['issues']): string {
   const issuesByFile = new Map<string, string[]>()
-  
+
   for (const issue of issues) {
     if (!issuesByFile.has(issue.file)) {
       issuesByFile.set(issue.file, [])
     }
     const ruleInfo = issue.rule ? `  ${issue.rule}` : ''
-    issuesByFile.get(issue.file)!.push(
-      `  ${issue.line}:${issue.column}  ${issue.severity}  ${issue.message}${ruleInfo}`
-    )
+    issuesByFile
+      .get(issue.file)!
+      .push(
+        `  ${issue.line}:${issue.column}  ${issue.severity}  ${issue.message}${ruleInfo}`
+      )
   }
 
   let formattedIssues = ''
   for (const [file, fileIssues] of issuesByFile) {
     formattedIssues += `\n${file}\n${fileIssues.join('\n')}`
   }
-  
+
   return formattedIssues
 }
 
@@ -111,13 +112,13 @@ export async function handlePostToolLint(
 ): Promise<ValidationResult> {
   const validatedHookData = parseAndValidateHookData(hookData)
   if (!validatedHookData) {
-    return DEFAULT_RESULT
+    return allow
   }
 
   // Extract file paths from tool operation
   const filePaths = extractFilePaths(validatedHookData)
   if (filePaths.length === 0) {
-    return DEFAULT_RESULT
+    return allow
   }
 
   // Get current lint data to check hasNotifiedAboutLintIssues state
@@ -125,11 +126,11 @@ export async function handlePostToolLint(
 
   // Run linting on the files
   const lintResults = await linter.lint(filePaths)
-  
+
   // Create and save lint data
   const lintData = createLintData(lintResults, storedLintData)
   await storage.saveLint(JSON.stringify(lintData))
-  
+
   const hasIssues = lintResults.errorCount > 0 || lintResults.warningCount > 0
 
   // Block if:
@@ -139,7 +140,7 @@ export async function handlePostToolLint(
     return createBlockResult(lintData)
   }
 
-  return DEFAULT_RESULT
+  return allow
 }
 
 function extractFilePaths(hookData: HookData): string[] {

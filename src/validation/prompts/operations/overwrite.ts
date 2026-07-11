@@ -10,6 +10,8 @@ You are reviewing a Write operation that overwrites an existing file. Determine 
 **IMPORTANT**: First identify if this is a test file or implementation file by checking the file path for \`.test.\`, \`.spec.\`, or \`test/\`.
 
 ${COUNT_NEW_TESTS}
+The New File Content shows the ENTIRE file, including tests carried over unchanged from the old content. A carried-over test is NOT an addition; do not count it as a new test or describe it as "added".
+
 ### Analyzing Test File Overwrites
 
 Adding ONE **new** test (as counted above) is allowed without a failing test output. This is the foundation of TDD.

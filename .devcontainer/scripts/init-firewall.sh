@@ -16,6 +16,7 @@
 #   - Packagist: packagist.org, repo.packagist.org, getcomposer.org
 #   - Go: proxy.golang.org, sum.golang.org, go.dev, storage.googleapis.com, honnef.co
 #   - Ruby: rubygems.org
+#   - JVM: services.gradle.org, plugins.gradle.org, repo.maven.apache.org
 #   - Rust: crates.io, static.crates.io, index.crates.io
 #   - NuGet: api.nuget.org
 # - Claude/Anthropic services: api.anthropic.com, sentry.io, statsig.com
@@ -109,7 +110,6 @@ for domain in \
     "registry.npmjs.org" \
     "api.anthropic.com" \
     "sentry.io" \
-    "statsig.anthropic.com" \
     "statsig.com" \
     "pypi.org" \
     "files.pythonhosted.org" \
@@ -122,6 +122,9 @@ for domain in \
     "storage.googleapis.com" \
     "honnef.co" \
     "rubygems.org" \
+    "services.gradle.org" \
+    "plugins.gradle.org" \
+    "repo.maven.apache.org" \
     "crates.io" \
     "static.crates.io" \
     "index.crates.io" \

@@ -15,6 +15,7 @@ export const COUNT_NEW_TESTS = `### How to Count New Tests
    - NOT: Splitting one existing test into multiple tests that cover the same assertions
 
 3. **Multiple test check:**
+   - Count only NEW tests, never the total number of tests in the file. A test file may contain many tests; ending up with a second test is not itself a violation.
    - One new test = Allowed (part of TDD cycle)
    - Two or more new tests = Violation
 `

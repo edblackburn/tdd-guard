@@ -46,7 +46,7 @@ Get your API key from [console.anthropic.com](https://console.anthropic.com/)
 
 ## Model Selection
 
-Configure which Claude model to use for validation (default: `claude-sonnet-4-0`):
+Configure which Claude model to use for validation (default: `claude-sonnet-4-6`):
 
 ```bash
 # Fastest but unreliable results

@@ -1,6 +1,15 @@
 plugins {
-    `java-library`
+    `java-gradle-plugin`
     `maven-publish`
+}
+
+gradlePlugin {
+    plugins {
+        create("tddGuard") {
+            id = "io.github.nizos.tdd-guard-junit5"
+            implementationClass = "io.github.nizos.tddguard.junit5.TddGuardPlugin"
+        }
+    }
 }
 
 group = "io.github.nizos"
@@ -12,6 +21,10 @@ java {
     }
     withSourcesJar()
     withJavadocJar()
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    options.release.set(17)
 }
 
 repositories {
@@ -28,6 +41,11 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    // Fixture classes under the `fixtures` package are driven directly by
+    // the JUnit Platform Launcher API from integration tests. Excluding
+    // them from the regular test discovery prevents their deliberately
+    // failing hooks from breaking the outer build.
+    exclude("**/fixtures/**")
 }
 
 publishing {

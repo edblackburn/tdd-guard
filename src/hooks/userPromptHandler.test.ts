@@ -32,7 +32,7 @@ describe('UserPromptHandler', () => {
       await guardManager.disable() // Ensure guard starts disabled
       const hookData = {
         ...testData.userPromptSubmit({ prompt: 'tdd-guard on' }),
-        hook_event_name: 'PreToolUse' // Not UserPromptSubmit
+        hook_event_name: 'PreToolUse', // Not UserPromptSubmit
       }
 
       await handler.processUserCommand(JSON.stringify(hookData))
@@ -85,7 +85,7 @@ describe('UserPromptHandler', () => {
         decision: undefined,
         reason: 'TDD Guard enabled',
         continue: false,
-        stopReason: 'TDD Guard enabled'
+        stopReason: 'TDD Guard enabled',
       })
     })
 
@@ -98,7 +98,7 @@ describe('UserPromptHandler', () => {
         decision: undefined,
         reason: 'TDD Guard disabled',
         continue: false,
-        stopReason: 'TDD Guard disabled'
+        stopReason: 'TDD Guard disabled',
       })
     })
 
@@ -112,7 +112,7 @@ describe('UserPromptHandler', () => {
   })
 
   describe('getDisabledResult', () => {
-    test('returns defaultResult when guard is disabled', async () => {
+    test('returns allow when guard is disabled', async () => {
       await guardManager.disable()
 
       const result = await handler.getDisabledResult()

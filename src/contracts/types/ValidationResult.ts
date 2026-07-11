@@ -1,5 +1,5 @@
 export type ValidationResult = {
-  decision: 'approve' | 'block' | undefined
+  decision: 'block' | undefined
   reason: string
   continue?: boolean
   stopReason?: string

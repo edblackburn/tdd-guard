@@ -1,9 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { Config } from '../../config/Config'
-import { IModelClient } from '../../contracts/types/ModelClient'
+import { ModelClient } from '../../contracts/types/ModelClient'
 import { SYSTEM_PROMPT } from '../prompts/system-prompt'
 
-export class AnthropicApi implements IModelClient {
+export class AnthropicApi implements ModelClient {
   private readonly config: Config
   private readonly client: Anthropic
 

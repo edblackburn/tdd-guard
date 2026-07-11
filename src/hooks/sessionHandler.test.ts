@@ -33,58 +33,58 @@ describe('SessionHandler', () => {
       })
 
       describe('when SessionStart event is received', () => {
-      beforeEach(async () => {
-        const sessionStartData = testData.sessionStart()
-        await handler.processSessionStart(JSON.stringify(sessionStartData))
+        beforeEach(async () => {
+          const sessionStartData = testData.sessionStart()
+          await handler.processSessionStart(JSON.stringify(sessionStartData))
+        })
+
+        test('clears test data', async () => {
+          expect(await storage.getTest()).toBeNull()
+        })
+
+        test('clears todo data', async () => {
+          expect(await storage.getTodo()).toBeNull()
+        })
+
+        test('clears modifications data', async () => {
+          expect(await storage.getModifications()).toBeNull()
+        })
+
+        test('clears lint data', async () => {
+          expect(await storage.getLint()).toBeNull()
+        })
+
+        test('preserves config data', async () => {
+          expect(await storage.getConfig()).toBe('config data')
+        })
       })
 
-      test('clears test data', async () => {
-        expect(await storage.getTest()).toBeNull()
-      })
+      describe('when non-SessionStart event is received', () => {
+        beforeEach(async () => {
+          const nonSessionStartData = testData.editOperation()
+          await handler.processSessionStart(JSON.stringify(nonSessionStartData))
+        })
 
-      test('clears todo data', async () => {
-        expect(await storage.getTodo()).toBeNull()
-      })
+        test('preserves test data', async () => {
+          expect(await storage.getTest()).toBe('test data')
+        })
 
-      test('clears modifications data', async () => {
-        expect(await storage.getModifications()).toBeNull()
-      })
+        test('preserves todo data', async () => {
+          expect(await storage.getTodo()).toBe('todo data')
+        })
 
-      test('clears lint data', async () => {
-        expect(await storage.getLint()).toBeNull()
-      })
+        test('preserves modifications data', async () => {
+          expect(await storage.getModifications()).toBe('modifications data')
+        })
 
-      test('preserves config data', async () => {
-        expect(await storage.getConfig()).toBe('config data')
-      })
-    })
+        test('preserves lint data', async () => {
+          expect(await storage.getLint()).toBe('lint data')
+        })
 
-    describe('when non-SessionStart event is received', () => {
-      beforeEach(async () => {
-        const nonSessionStartData = testData.editOperation()
-        await handler.processSessionStart(JSON.stringify(nonSessionStartData))
+        test('preserves config data', async () => {
+          expect(await storage.getConfig()).toBe('config data')
+        })
       })
-
-      test('preserves test data', async () => {
-        expect(await storage.getTest()).toBe('test data')
-      })
-
-      test('preserves todo data', async () => {
-        expect(await storage.getTodo()).toBe('todo data')
-      })
-
-      test('preserves modifications data', async () => {
-        expect(await storage.getModifications()).toBe('modifications data')
-      })
-
-      test('preserves lint data', async () => {
-        expect(await storage.getLint()).toBe('lint data')
-      })
-
-      test('preserves config data', async () => {
-        expect(await storage.getConfig()).toBe('config data')
-      })
-    })
     })
 
     describe('custom instructions', () => {
@@ -101,7 +101,7 @@ describe('SessionHandler', () => {
 
       describe('when instructions already exist', () => {
         const customInstructions = '## My Custom TDD Rules'
-        
+
         beforeEach(async () => {
           await storage.saveInstructions(customInstructions)
         })
@@ -110,7 +110,7 @@ describe('SessionHandler', () => {
           'preserves existing instructions on %s event',
           async (source) => {
             const instructions = await startAndGetInstructions(source)
-            
+
             expect(instructions).toBe(customInstructions)
             expect(instructions).not.toContain('## Rules')
           }
@@ -128,7 +128,9 @@ describe('SessionHandler', () => {
     await storage.saveConfig('config data')
   }
 
-  async function startAndGetInstructions(source: SessionStart['source']): Promise<string | null> {
+  async function startAndGetInstructions(
+    source: SessionStart['source']
+  ): Promise<string | null> {
     const sessionData = testData.sessionStart({ source })
     await handler.processSessionStart(JSON.stringify(sessionData))
     return storage.getInstructions()

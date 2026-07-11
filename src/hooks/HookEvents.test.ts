@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeEach } from 'vitest'
 import { HookEvents } from './HookEvents'
 import { MemoryStorage } from '../storage/MemoryStorage'
+import { ToolOperation } from '../contracts/schemas/toolSchemas'
 import { testData } from '@testUtils'
 
 describe('HookEvents', () => {
@@ -63,12 +64,16 @@ describe('HookEvents', () => {
     test('overwrites previous content instead of appending', async () => {
       // First write
       await sut.processEvent(
-        testData.writeOperation({ tool_input: { file_path: '/path', content: 'first content' }})
+        testData.writeOperation({
+          tool_input: { file_path: '/path', content: 'first content' },
+        })
       )
 
       // Second write should overwrite
       await sut.processEvent(
-        testData.writeOperation({ tool_input: { file_path: '/path', content: 'second content' }})
+        testData.writeOperation({
+          tool_input: { file_path: '/path', content: 'second content' },
+        })
       )
 
       const logContent = await sut.readModifications()
@@ -81,7 +86,7 @@ describe('HookEvents', () => {
   async function setupHookEvents(): Promise<{
     readModifications: () => Promise<string>
     readTodos: () => Promise<string>
-    processEvent: (data: unknown) => Promise<void>
+    processEvent: (operation: ToolOperation) => Promise<void>
   }> {
     const storage = new MemoryStorage()
     const hookEvents = new HookEvents(storage)
@@ -101,7 +106,8 @@ describe('HookEvents', () => {
     return {
       readModifications,
       readTodos,
-      processEvent: (data: unknown): Promise<void> => hookEvents.processEvent(data),
+      processEvent: (operation: ToolOperation): Promise<void> =>
+        hookEvents.processEvent(operation),
     }
   }
 })

@@ -1,6 +1,6 @@
 import { Context } from '../contracts/types/Context'
 import { ValidationResult } from '../contracts/types/ValidationResult'
-import { IModelClient } from '../contracts/types/ModelClient'
+import { ModelClient } from '../contracts/types/ModelClient'
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 import { validator } from './validator'
 import { generateDynamicContext } from './context/context'
@@ -174,6 +174,16 @@ This violates TDD principles as explained in the numbered list above.
             'Multiple test addition violation - adding 2 new tests simultaneously instead of following TDD discipline of one test at a time',
         },
       },
+      {
+        name: 'should treat a reasonless allow as an empty reason',
+        modelResponse: '{"decision": null}',
+        expected: { decision: undefined, reason: '' },
+      },
+      {
+        name: 'should treat a fence-less decision-only response as an allow',
+        modelResponse: 'Looks fine.\n{"decision": null}',
+        expected: { decision: undefined, reason: '' },
+      },
     ]
 
     testCases.forEach(({ name, modelResponse, expected }) => {
@@ -229,6 +239,20 @@ This violates TDD principles as explained in the numbered list above.
       expect(result.reason).not.toContain('Error during validation')
       expect(result.reason).toBe('No response from model, try again')
     })
+
+    test('surfaces the model response when it is not valid JSON', async () => {
+      const { result } = await runValidator('Credit balance too low')
+
+      expect(result.decision).toBe('block')
+      expect(result.reason).toContain('Credit balance too low')
+    })
+
+    test('blocks when the response has no usable decision', async () => {
+      const { result } = await runValidator('{"reason": "explanation only"}')
+
+      expect(result.decision).toBe('block')
+      expect(result.reason).toContain('explanation only')
+    })
   })
 
   // Test helper
@@ -240,10 +264,10 @@ This violates TDD principles as explained in the numbered list above.
     }
   ): Promise<{
     result: ValidationResult
-    mockModelClient: IModelClient
+    mockModelClient: ModelClient
     context: Context
   }> {
-    const mockModelClient: IModelClient = {
+    const mockModelClient: ModelClient = {
       ask:
         modelResponse instanceof Error
           ? vi.fn().mockRejectedValue(modelResponse)

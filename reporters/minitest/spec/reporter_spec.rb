@@ -288,6 +288,48 @@ RSpec.describe TddGuardMinitest::Reporter do
         end
       end
     end
+
+    describe "compute_expected_count" do
+      it "returns zero when filter is a Proc (so a Rails proc-style filter is not flagged as interrupted)" do
+        Dir.mktmpdir do |tmpdir|
+          create_reporter_in(tmpdir) do |reporter, _|
+            reporter.options[:filter] = ->(_method_name) { true }
+            expect(reporter.send(:compute_expected_count)).to eq(0)
+          end
+        end
+      end
+
+      it "returns zero when test_files contain a line-number entry (Rails `path:N`)" do
+        Dir.mktmpdir do |tmpdir|
+          create_reporter_in(tmpdir) do |reporter, _|
+            reporter.options[:test_files] = ["test/foo_test.rb:8"]
+            expect(reporter.send(:compute_expected_count)).to eq(0)
+          end
+        end
+      end
+
+      it "does not short-circuit when test_files have no line numbers" do
+        Dir.mktmpdir do |tmpdir|
+          create_reporter_in(tmpdir) do |reporter, _|
+            reporter.options[:test_files] = ["test/foo_test.rb"]
+            expect(reporter.send(:line_targeted?, reporter.options[:test_files]))
+              .to be false
+          end
+        end
+      end
+
+      it "detects line-number entries with line_targeted?" do
+        Dir.mktmpdir do |tmpdir|
+          create_reporter_in(tmpdir) do |reporter, _|
+            expect(reporter.send(:line_targeted?, ["test/foo_test.rb:8"])).to be true
+            expect(reporter.send(:line_targeted?, ["test/foo_test.rb:8", "test/bar_test.rb"])).to be true
+            expect(reporter.send(:line_targeted?, ["test/foo_test.rb"])).to be false
+            expect(reporter.send(:line_targeted?, [])).to be false
+            expect(reporter.send(:line_targeted?, nil)).to be false
+          end
+        end
+      end
+    end
   end
 
   describe "stack field" do
@@ -416,6 +458,87 @@ RSpec.describe TddGuardMinitest::Reporter do
     end
   end
 
+  describe "non-utf-8 message handling" do
+    it "scrubs binary (ASCII-8BIT) bytes from a failure message" do
+      Dir.mktmpdir do |tmpdir|
+        create_reporter_in(tmpdir) do |reporter, storage_dir|
+          failure = build_assertion_failure(message: "binary: \xff\xfe".b)
+          reporter.record(
+            build_result(name: "test_with_binary", klass: "BinaryTest",
+                         source_location: ["./test/binary_test.rb", 5],
+                         failures: [failure])
+          )
+
+          data = run_and_read_json(reporter, storage_dir)
+          tests = all_tests(data)
+          expect(tests.length).to eq(1)
+          expect(tests[0]["state"]).to eq("failed")
+          expect(tests[0]["errors"][0]["message"]).to start_with("binary: ")
+        end
+      end
+    end
+
+    it "preserves valid UTF-8 (including Japanese) unchanged" do
+      Dir.mktmpdir do |tmpdir|
+        create_reporter_in(tmpdir) do |reporter, storage_dir|
+          failure = build_assertion_failure(message: "失敗しました")
+          reporter.record(
+            build_result(name: "test_japanese", klass: "JaTest",
+                         source_location: ["./test/ja_test.rb", 5],
+                         failures: [failure])
+          )
+
+          data = run_and_read_json(reporter, storage_dir)
+          tests = all_tests(data)
+          expect(tests[0]["errors"][0]["message"]).to eq("失敗しました")
+        end
+      end
+    end
+
+    it "transcodes Shift_JIS messages to UTF-8" do
+      Dir.mktmpdir do |tmpdir|
+        create_reporter_in(tmpdir) do |reporter, storage_dir|
+          failure = build_assertion_failure(message: "失敗".encode("Shift_JIS"))
+          reporter.record(
+            build_result(name: "test_sjis", klass: "SjisTest",
+                         source_location: ["./test/sjis_test.rb", 5],
+                         failures: [failure])
+          )
+
+          data = run_and_read_json(reporter, storage_dir)
+          tests = all_tests(data)
+          expect(tests[0]["errors"][0]["message"]).to eq("失敗")
+        end
+      end
+    end
+
+    it "preserves other tests in the same run when one has a non-utf-8 message" do
+      Dir.mktmpdir do |tmpdir|
+        create_reporter_in(tmpdir) do |reporter, storage_dir|
+          reporter.record(
+            build_result(name: "test_pass_one", klass: "MixTest",
+                         source_location: ["./test/mix_test.rb", 1])
+          )
+          reporter.record(
+            build_result(name: "test_binary_fail", klass: "MixTest",
+                         source_location: ["./test/mix_test.rb", 5],
+                         failures: [build_assertion_failure(message: "\xff\xfe".b)])
+          )
+          reporter.record(
+            build_result(name: "test_pass_two", klass: "MixTest",
+                         source_location: ["./test/mix_test.rb", 9])
+          )
+
+          data = run_and_read_json(reporter, storage_dir)
+          tests = all_tests(data)
+          expect(tests.length).to eq(3)
+          states = tests.map { |t| t["state"] }
+          expect(states).to contain_exactly("passed", "passed", "failed")
+        end
+      end
+    end
+  end
+
   describe "name extraction" do
     it "uses result.name as name" do
       Dir.mktmpdir do |tmpdir|
@@ -475,67 +598,128 @@ RSpec.describe TddGuardMinitest::Reporter do
   end
 
   describe "storage directory determination" do
-    it "uses default relative path when no env var set" do
+    it "raises when no env var is set" do
       Dir.mktmpdir do |tmpdir|
         real_tmpdir = File.realpath(tmpdir)
         Dir.chdir(real_tmpdir) do
           ClimateControl.modify("TDD_GUARD_PROJECT_ROOT" => nil) do
-            reporter = described_class.new(StringIO.new)
-            reporter.report
-
-            json_path = File.join(default_data_dir, "test.json")
-            expect(File.exist?(json_path)).to be true
+            expect { described_class.new(StringIO.new) }
+              .to raise_error(ArgumentError, /must be configured via TDD_GUARD_PROJECT_ROOT/)
           end
         end
       end
     end
 
-    it "rejects relative path in env var" do
+    it "raises when env var is empty" do
       Dir.mktmpdir do |tmpdir|
         real_tmpdir = File.realpath(tmpdir)
         Dir.chdir(real_tmpdir) do
-          ClimateControl.modify("TDD_GUARD_PROJECT_ROOT" => "../some/path") do
-            reporter = described_class.new(StringIO.new)
-            reporter.report
-
-            json_path = File.join(default_data_dir, "test.json")
-            expect(File.exist?(json_path)).to be true
-            expect(File.exist?(File.join("../some/path", default_data_dir, "test.json"))).to be false
+          ClimateControl.modify("TDD_GUARD_PROJECT_ROOT" => "") do
+            expect { described_class.new(StringIO.new) }
+              .to raise_error(ArgumentError, /must be configured via TDD_GUARD_PROJECT_ROOT/)
           end
         end
       end
     end
 
-    it "rejects project root when cwd is outside" do
+    it "accepts a relative path" do
       Dir.mktmpdir do |tmpdir|
         real_tmpdir = File.realpath(tmpdir)
         Dir.chdir(real_tmpdir) do
-          ClimateControl.modify("TDD_GUARD_PROJECT_ROOT" => "/other/project") do
+          ClimateControl.modify("TDD_GUARD_PROJECT_ROOT" => ".") do
             reporter = described_class.new(StringIO.new)
             reporter.report
 
-            json_path = File.join(default_data_dir, "test.json")
+            json_path = File.join(real_tmpdir, default_data_dir, "test.json")
             expect(File.exist?(json_path)).to be true
           end
         end
       end
     end
 
-    it "rejects project root that is a prefix of cwd but not an ancestor" do
+    it "accepts a path containing .." do
+      Dir.mktmpdir do |tmpdir|
+        real_tmpdir = File.realpath(tmpdir)
+        sub_dir = File.join(real_tmpdir, "sub")
+        FileUtils.mkdir_p(sub_dir)
+        Dir.chdir(sub_dir) do
+          ClimateControl.modify("TDD_GUARD_PROJECT_ROOT" => "../") do
+            reporter = described_class.new(StringIO.new)
+            reporter.report
+
+            json_path = File.join(real_tmpdir, default_data_dir, "test.json")
+            expect(File.exist?(json_path)).to be true
+          end
+        end
+      end
+    end
+
+    it "raises when cwd is outside the project root" do
+      Dir.mktmpdir do |tmpdir|
+        real_tmpdir = File.realpath(tmpdir)
+        Dir.mktmpdir do |outside_dir|
+          real_outside = File.realpath(outside_dir)
+          Dir.chdir(real_tmpdir) do
+            ClimateControl.modify("TDD_GUARD_PROJECT_ROOT" => real_outside) do
+              expect { described_class.new(StringIO.new) }
+                .to raise_error(ArgumentError, /current directory must be within project root/)
+            end
+          end
+        end
+      end
+    end
+
+    it "raises with a path-identifying error when project root does not exist" do
+      Dir.mktmpdir do |tmpdir|
+        real_tmpdir = File.realpath(tmpdir)
+        Dir.chdir(real_tmpdir) do
+          missing = File.join(real_tmpdir, "does", "not", "exist")
+          ClimateControl.modify("TDD_GUARD_PROJECT_ROOT" => missing) do
+            expect { described_class.new(StringIO.new) }
+              .to raise_error(ArgumentError) do |err|
+                expect(err.message).to include("project root does not exist")
+                expect(err.message).to include(missing)
+              end
+          end
+        end
+      end
+    end
+
+    it "resolves storage dir correctly when project root and cwd differ via symlink" do
+      Dir.mktmpdir do |tmpdir|
+        real_outer = File.realpath(tmpdir)
+        real_root = File.join(real_outer, "real_root")
+        FileUtils.mkdir_p(real_root)
+        symlink_root = File.join(real_outer, "sym_root")
+        File.symlink(real_root, symlink_root)
+
+        # cwd reaches the project via the symlink while the env var points
+        # at the canonical real path. canonical_path on both sides should
+        # converge to real_root so cwd_within? still recognises the match.
+        Dir.chdir(symlink_root) do
+          ClimateControl.modify("TDD_GUARD_PROJECT_ROOT" => real_root) do
+            reporter = described_class.new(StringIO.new)
+            reporter.report
+
+            json_path = File.join(real_root, default_data_dir, "test.json")
+            expect(File.exist?(json_path)).to be true
+          end
+        end
+      end
+    end
+
+    it "raises when project root is a prefix of cwd but not an ancestor" do
       Dir.mktmpdir do |tmpdir|
         real_tmpdir = File.realpath(tmpdir)
         project_dir = File.join(real_tmpdir, "foo")
         similar_dir = File.join(real_tmpdir, "foobar")
+        FileUtils.mkdir_p(project_dir)
         FileUtils.mkdir_p(similar_dir)
 
         Dir.chdir(similar_dir) do
           ClimateControl.modify("TDD_GUARD_PROJECT_ROOT" => project_dir) do
-            reporter = described_class.new(StringIO.new)
-            reporter.report
-
-            json_path = File.join(default_data_dir, "test.json")
-            expect(File.exist?(json_path)).to be true
-            expect(File.exist?(File.join(project_dir, default_data_dir, "test.json"))).to be false
+            expect { described_class.new(StringIO.new) }
+              .to raise_error(ArgumentError, /current directory must be within project root/)
           end
         end
       end
@@ -694,6 +878,9 @@ RSpec.describe TddGuardMinitest::Reporter do
   end
 
   describe ".handle_load_error" do
+    before { TddGuardMinitest.reported = false }
+    after  { TddGuardMinitest.reported = false }
+
     # Helper: run handle_load_error in an isolated tmpdir and return parsed JSON
     def run_handle_load_error_in(tmpdir, exception)
       real_tmpdir = File.realpath(tmpdir)
@@ -740,6 +927,36 @@ RSpec.describe TddGuardMinitest::Reporter do
         data = run_handle_load_error_in(tmpdir, exc)
 
         expect(data["testModules"][0]["moduleId"]).to eq("test/my_class_test.rb")
+      end
+    end
+
+    it "strips the cwd prefix from absolute backtrace paths so moduleId is relative" do
+      Dir.mktmpdir do |tmpdir|
+        real_tmpdir = File.realpath(tmpdir)
+        absolute_frame = "#{real_tmpdir}/test/my_class_test.rb:3:in `require'"
+        exc = build_load_error(
+          message: "cannot load such file -- my_class",
+          backtrace: [absolute_frame]
+        )
+        data = run_handle_load_error_in(tmpdir, exc)
+
+        expect(data["testModules"][0]["moduleId"]).to eq("test/my_class_test.rb")
+      end
+    end
+
+    it "strips the cwd prefix from absolute backtrace frames embedded in the error message" do
+      Dir.mktmpdir do |tmpdir|
+        real_tmpdir = File.realpath(tmpdir)
+        absolute_frame = "#{real_tmpdir}/test/my_class_test.rb:3:in `<top (required)>'"
+        exc = build_load_error(
+          message: "cannot load such file -- my_class",
+          backtrace: [absolute_frame]
+        )
+        data = run_handle_load_error_in(tmpdir, exc)
+
+        message = data["testModules"][0]["tests"][0]["errors"][0]["message"]
+        expect(message).to include("test/my_class_test.rb:3:in `<top (required)>'")
+        expect(message).not_to include(real_tmpdir)
       end
     end
 
@@ -821,14 +1038,14 @@ RSpec.describe TddGuardMinitest::Reporter do
       end
     end
 
-    it "does not overwrite an existing test.json" do
+    it "overwrites a stale test.json left behind by a previous process" do
       Dir.mktmpdir do |tmpdir|
         real_tmpdir = File.realpath(tmpdir)
         Dir.chdir(real_tmpdir) do
           ClimateControl.modify("TDD_GUARD_PROJECT_ROOT" => real_tmpdir) do
             json_path = File.join(real_tmpdir, default_data_dir, "test.json")
             FileUtils.mkdir_p(File.dirname(json_path))
-            File.write(json_path, '{"existing":"results"}')
+            File.write(json_path, '{"testModules":[],"reason":"passed"}')
 
             exc = build_load_error(
               message: "cannot load such file -- my_class",
@@ -836,7 +1053,37 @@ RSpec.describe TddGuardMinitest::Reporter do
             )
             described_class.handle_load_error(exc)
 
-            expect(File.read(json_path)).to eq('{"existing":"results"}')
+            data = JSON.parse(File.read(json_path))
+            expect(data["reason"]).to eq("failed")
+            expect(data["testModules"][0]["moduleId"]).to eq("test/my_class_test.rb")
+          end
+        end
+      end
+    end
+
+    it "does not overwrite test.json after report has run in this process" do
+      Dir.mktmpdir do |tmpdir|
+        real_tmpdir = File.realpath(tmpdir)
+        Dir.chdir(real_tmpdir) do
+          ClimateControl.modify("TDD_GUARD_PROJECT_ROOT" => real_tmpdir) do
+            reporter = described_class.new(StringIO.new)
+            reporter.record(
+              build_result(name: "test_passes", klass: "MyTest",
+                           source_location: ["./test/my_test.rb", 5])
+            )
+            reporter.report  # sets the in-process flag
+
+            exc = build_load_error(
+              message: "cannot load such file -- my_class",
+              backtrace: ["./test/my_class_test.rb:3:in `require'"]
+            )
+            described_class.handle_load_error(exc)
+
+            json_path = File.join(real_tmpdir, default_data_dir, "test.json")
+            data = JSON.parse(File.read(json_path))
+            tests = data["testModules"].flat_map { |m| m["tests"] }
+            expect(tests.length).to eq(1)
+            expect(tests[0]["name"]).to eq("test_passes")
           end
         end
       end

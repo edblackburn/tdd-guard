@@ -2,7 +2,7 @@
 
 Gem::Specification.new do |spec|
   spec.name = "tdd-guard-minitest"
-  spec.version = "0.1.0"
+  spec.version = "0.2.0"
   spec.authors = ["Hiro-Chiba"]
   spec.summary = "Minitest reporter for TDD Guard - enforces Test-Driven Development principles"
   spec.description = "Minitest reporter that captures test results for TDD Guard validation."

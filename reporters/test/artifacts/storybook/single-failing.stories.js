@@ -1,8 +1,8 @@
-import { expect } from '@storybook/test'
+import { expect } from 'storybook/test'
 import { Calculator } from './Calculator'
 
 export default {
-  title: 'Calculator',
+  title: 'CalculatorFailing',
   render: () => null, // No UI component, just testing logic
 }
 

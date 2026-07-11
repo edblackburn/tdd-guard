@@ -170,6 +170,12 @@ jobs:
         with:
           ruby-version: '3.3'
 
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
       - name: Install npm dependencies
         run: npm ci
 
@@ -212,6 +218,10 @@ jobs:
       - name: Build Rust reporter
         working-directory: reporters/rust
         run: cargo build --release
+
+      - name: Test and build JUnit5 reporter
+        working-directory: reporters/junit5
+        run: ./gradlew check jar --no-daemon
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4

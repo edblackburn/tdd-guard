@@ -24,6 +24,7 @@ Set up TDD Guard for the current project. Your goal is to:
 | Go        | github.com/nizos/tdd-guard/reporters/go/cmd/tdd-guard-go | go install |
 | Rust      | tdd-guard-rust                                           | crates.io  |
 | RSpec     | tdd-guard-rspec                                          | RubyGems   |
+| Minitest  | tdd-guard-minitest                                       | RubyGems   |
 
 ## Reporter configuration
 
@@ -111,6 +112,17 @@ cargo nextest run 2>&1 | tdd-guard-rust --project-root /absolute/path/to/project
 
 ```
 --format TddGuardRspec::Formatter
+```
+
+```bash
+export TDD_GUARD_PROJECT_ROOT="/absolute/path/to/project"
+```
+
+**Minitest** — Require `tdd_guard_minitest/autorun` from `test/test_helper.rb` (or pass `-rtdd_guard_minitest/autorun` via `Rake::TestTask` ruby_opts) and set `TDD_GUARD_PROJECT_ROOT` to the absolute project root path.
+
+```ruby
+# test/test_helper.rb
+require "tdd_guard_minitest/autorun"
 ```
 
 ```bash

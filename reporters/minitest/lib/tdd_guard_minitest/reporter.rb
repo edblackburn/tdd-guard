@@ -6,9 +6,11 @@ require "minitest"
 
 module TddGuardMinitest
   @unhandled_errors = []
+  @reported = false
 
   class << self
     attr_reader :unhandled_errors
+    attr_accessor :reported
   end
 
   # Minitest reporter that captures test results for TDD Guard validation.
@@ -34,10 +36,17 @@ module TddGuardMinitest
     # point's at_exit hook when $! is set.
     #
     # Injects a synthetic entry into @test_results and writes the JSON
-    # through the normal report path. Skips if test.json already exists
-    # to avoid clobbering real results.
+    # through the normal report path. Skips when this process has already
+    # written test.json via the normal Minitest flow, so it never clobbers
+    # real results from the same run. A stale test.json left behind by a
+    # previous process is overwritten so the file always reflects the most
+    # recent run's state.
     def self.handle_load_error(exception)
       new(StringIO.new).handle_load_error(exception)
+    rescue ArgumentError
+      # Project root is not configured; the user has already seen the
+      # configuration error from the main test run. Avoid double-raising
+      # from the autorun at_exit hook.
     end
 
     # Reads the existing test.json, merges in the unhandledErrors field,
@@ -45,6 +54,8 @@ module TddGuardMinitest
     # autorun.rb after Minitest.after_run blocks have completed.
     def self.append_unhandled_errors(errors)
       new(StringIO.new).append_unhandled_errors(errors)
+    rescue ArgumentError
+      # Same as above: skip when the project root is not configured.
     end
 
     def append_unhandled_errors(errors)
@@ -57,7 +68,7 @@ module TddGuardMinitest
     end
 
     def handle_load_error(exception)
-      return if File.exist?(File.join(@storage_dir, "test.json"))
+      return if TddGuardMinitest.reported
 
       add_load_error(exception)
       report
@@ -109,6 +120,7 @@ module TddGuardMinitest
 
       FileUtils.mkdir_p(@storage_dir)
       File.write(File.join(@storage_dir, "test.json"), JSON.pretty_generate(result))
+      TddGuardMinitest.reported = true
     end
 
     def passed?
@@ -119,6 +131,17 @@ module TddGuardMinitest
 
     def compute_expected_count
       filter = options[:filter]
+      # Skip the count when the filter cannot be reliably matched against
+      # method names. Two cases motivate this:
+      # - filter is something other than String/Regexp (e.g. a Proc), which
+      #   Minitest's grep-based methods_matching cannot count.
+      # - Rails passes line-targeted runs (`rails test path:N`) via
+      #   options[:test_files] as "path:N" entries while leaving filter nil,
+      #   so runnable_methods returns the file's full set and an inflated
+      #   expected_count would falsely flip the run's reason to "interrupted".
+      return 0 if filter && !filter.is_a?(String) && !filter.is_a?(Regexp)
+      return 0 if line_targeted?(options[:test_files])
+
       Minitest::Runnable.runnables.sum do |klass|
         if filter
           klass.methods_matching(filter).size
@@ -128,9 +151,14 @@ module TddGuardMinitest
       end
     end
 
+    def line_targeted?(test_files)
+      return false unless test_files.is_a?(Array)
+      test_files.any? { |entry| entry.is_a?(String) && entry =~ /:\d+\z/ }
+    end
+
     def build_unhandled_error(exception)
       name = exception.class.name || "(anonymous error class)"
-      error = { "name" => name, "message" => exception.message }
+      error = { "name" => name, "message" => scrub_utf8(exception.message) }
       stack = extract_relevant_stack(exception.backtrace)
       error["stack"] = stack if stack
       error
@@ -139,14 +167,29 @@ module TddGuardMinitest
     def build_error(failure)
       if failure.is_a?(Minitest::UnexpectedError)
         exception = failure.error
-        error = { "message" => exception.message }
+        error = { "message" => scrub_utf8(exception.message) }
         stack = extract_relevant_stack(exception.backtrace)
       else
-        error = { "message" => failure.message }
+        error = { "message" => scrub_utf8(failure.message) }
         stack = extract_relevant_stack(failure.backtrace)
       end
       error["stack"] = stack if stack
       error
+    end
+
+    # Replace bytes that cannot be represented as UTF-8 so that
+    # JSON.pretty_generate does not raise on binary or alternately
+    # encoded strings (e.g. Shift_JIS, ASCII-8BIT). Valid UTF-8
+    # strings, including Japanese, pass through unchanged.
+    def scrub_utf8(str)
+      return str unless str.is_a?(String)
+      return str if str.encoding == Encoding::UTF_8 && str.valid_encoding?
+
+      if str.encoding == Encoding::UTF_8
+        str.scrub
+      else
+        str.encode("UTF-8", invalid: :replace, undef: :replace)
+      end
     end
 
     def extract_relevant_stack(backtrace)
@@ -164,8 +207,17 @@ module TddGuardMinitest
       source = result.source_location
       return "unknown" unless source
 
-      path = source.first
-      # Convert absolute path to relative path from cwd
+      relative_path(source.first)
+    end
+
+    # Strip a leading cwd prefix and any "./" so file paths in test.json
+    # are reported relative to the project root regardless of whether they
+    # arrived as absolute paths (from a backtrace) or already-relative
+    # paths (from result.source_location).
+    def relative_path(path)
+      return "unknown" if path.nil? || path.to_s.empty?
+
+      path = path.to_s
       cwd = "#{Dir.pwd}/"
       path = path.delete_prefix(cwd) if path.start_with?(cwd)
       path.sub(%r{^\./}, "")
@@ -173,30 +225,47 @@ module TddGuardMinitest
 
     def determine_storage_dir
       project_root = ENV["TDD_GUARD_PROJECT_ROOT"]
-      return DEFAULT_DATA_DIR unless project_root && !project_root.empty?
-      return DEFAULT_DATA_DIR unless absolute_path?(project_root)
-      return DEFAULT_DATA_DIR unless cwd_within?(project_root)
+      if project_root.nil? || project_root.empty?
+        raise ArgumentError,
+              "project root must be configured via TDD_GUARD_PROJECT_ROOT environment variable"
+      end
 
-      File.join(project_root, DEFAULT_DATA_DIR)
-    end
+      expanded = File.expand_path(project_root)
+      unless File.directory?(expanded)
+        raise ArgumentError,
+              "project root does not exist: #{expanded.inspect}"
+      end
 
-    def absolute_path?(path)
-      File.absolute_path?(path)
+      resolved = canonical_path(expanded)
+      unless cwd_within?(resolved)
+        raise ArgumentError,
+              "current directory must be within project root #{resolved.inspect}"
+      end
+
+      File.join(resolved, DEFAULT_DATA_DIR)
     end
 
     def cwd_within?(root)
-      expanded = File.expand_path(root)
-      cwd = Dir.pwd
-      cwd == expanded || cwd.start_with?("#{expanded}/")
+      cwd = canonical_path(Dir.pwd)
+      cwd == root || cwd.start_with?("#{root}/")
+    end
+
+    # Resolve symlinks when the path exists so that platforms with
+    # symlinked tempdirs (macOS /var -> /private/var) compare consistently.
+    def canonical_path(path)
+      File.realpath(path)
+    rescue Errno::ENOENT
+      path
     end
 
     # Injects a synthetic failed test entry derived from an exception raised
     # before Minitest could run.
     def add_load_error(exception)
       frame = first_user_frame(exception.backtrace)
-      file_path = frame ? frame.split(":", 2).first.to_s.sub(%r{^\./}, "") : "unknown"
-      name = "#{exception.class}: #{exception.message.lines.first.to_s.strip}"
-      message = build_load_error_message(exception, frame)
+      file_path = frame ? relative_path(frame.split(":", 2).first) : "unknown"
+      msg = scrub_utf8(exception.message)
+      name = "#{exception.class}: #{msg.lines.first.to_s.strip}"
+      message = build_load_error_message(exception, frame, msg)
 
       @test_results << {
         "name" => name,
@@ -214,11 +283,12 @@ module TddGuardMinitest
       end
     end
 
-    def build_load_error_message(exception, frame)
-      header = "#{exception.class}: #{exception.message}"
+    def build_load_error_message(exception, frame, message = nil)
+      msg = message || scrub_utf8(exception.message)
+      header = "#{exception.class}: #{msg}"
       return header unless frame
 
-      "#{header}\n    #{frame.sub(%r{^\./}, '')}"
+      "#{header}\n    #{relative_path(frame)}"
     end
   end
 end

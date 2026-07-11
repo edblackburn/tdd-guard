@@ -4,6 +4,7 @@ import io.github.nizos.tddguard.junit5.model.TestCase;
 import io.github.nizos.tddguard.junit5.model.TestError;
 import io.github.nizos.tddguard.junit5.model.TestModule;
 import io.github.nizos.tddguard.junit5.model.TestResult;
+import io.github.nizos.tddguard.junit5.model.UnhandledError;
 
 import java.io.IOException;
 import java.io.Writer;
@@ -45,8 +46,35 @@ public final class TestJsonWriter {
         sb.append("{\n");
         sb.append("  \"testModules\": ");
         appendModules(sb, result.testModules());
+        if (!result.unhandledErrors().isEmpty()) {
+            sb.append(",\n  \"unhandledErrors\": ");
+            appendUnhandledErrors(sb, result.unhandledErrors());
+        }
+        if (result.reason() != null) {
+            sb.append(",\n  \"reason\": ").append(quote(result.reason()));
+        }
         sb.append("\n}\n");
         return sb.toString();
+    }
+
+    private void appendUnhandledErrors(StringBuilder sb, List<UnhandledError> errors) {
+        sb.append("[\n");
+        for (int i = 0; i < errors.size(); i++) {
+            appendUnhandledError(sb, errors.get(i));
+            if (i < errors.size() - 1) sb.append(",");
+            sb.append("\n");
+        }
+        sb.append("  ]");
+    }
+
+    private void appendUnhandledError(StringBuilder sb, UnhandledError error) {
+        sb.append("    {\n");
+        sb.append("      \"name\": ").append(quote(error.name())).append(",\n");
+        sb.append("      \"message\": ").append(quote(error.message()));
+        if (error.stack() != null) {
+            sb.append(",\n      \"stack\": ").append(quote(error.stack()));
+        }
+        sb.append("\n    }");
     }
 
     private void appendModules(StringBuilder sb, List<TestModule> modules) {

@@ -1,49 +1,45 @@
 import { ValidationResult } from '../contracts/types/ValidationResult'
+import { block } from '../contracts/validationResults'
 import { Context } from '../contracts/types/Context'
-import { IModelClient } from '../contracts/types/ModelClient'
+import { ModelClient } from '../contracts/types/ModelClient'
 import { ClaudeCli } from './models/ClaudeCli'
 import { generateDynamicContext } from './context/context'
 
 interface ModelResponseJson {
-  decision: 'block' | 'approve' | null
-  reason: string
+  decision: string | null
+  reason?: string
 }
 
 export async function validator(
   context: Context,
-  modelClient: IModelClient = new ClaudeCli()
+  modelClient: ModelClient = new ClaudeCli()
 ): Promise<ValidationResult> {
   try {
     const prompt = generateDynamicContext(context)
     const response = await modelClient.ask(prompt)
+    if (!response) {
+      return block('No response from model, try again')
+    }
     return parseModelResponse(response)
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : 'Unknown error'
-    const reason =
-      errorMessage === 'No response from model'
-        ? 'No response from model, try again'
-        : `Error during validation: ${errorMessage}`
-
-    return {
-      decision: 'block',
-      reason,
-    }
+    return block(`Error during validation: ${errorMessage}`)
   }
 }
 
 function parseModelResponse(response: string): ValidationResult {
   const jsonString = extractJsonString(response)
-  const parsed = JSON.parse(jsonString)
+  let parsed: ModelResponseJson
+  try {
+    parsed = JSON.parse(jsonString)
+  } catch {
+    throw new Error(`The model did not return valid JSON: ${response}`)
+  }
   return normalizeValidationResult(parsed)
 }
 
 function extractJsonString(response: string): string {
-  // Handle undefined/null responses
-  if (!response) {
-    throw new Error('No response from model')
-  }
-
   const jsonFromCodeBlock = extractFromJsonCodeBlock(response)
   if (jsonFromCodeBlock) {
     return jsonFromCodeBlock
@@ -91,9 +87,8 @@ function extractFromJsonCodeBlock(response: string): string | null {
 }
 
 function extractPlainJson(response: string): string | null {
-  // Simple regex to find JSON objects containing both "decision" and "reason" (in any order)
-  const pattern =
-    /\{[^{}]*"decision"[^{}]*"reason"[^{}]*}|\{[^{}]*"reason"[^{}]*"decision"[^{}]*}/g
+  // Find the JSON object carrying the decision; the reason is optional.
+  const pattern = /\{[^{}]*"decision"[^{}]*}/g
   const matches = response.match(pattern)
 
   if (!matches) return null
@@ -152,8 +147,13 @@ function isValidJson(str: string): boolean {
 function normalizeValidationResult(
   parsed: ModelResponseJson
 ): ValidationResult {
-  return {
-    decision: parsed.decision ?? undefined,
-    reason: parsed.reason,
+  if (parsed.decision === 'block') {
+    return block(parsed.reason ?? '')
   }
+  if (parsed.decision === null) {
+    return { decision: undefined, reason: parsed.reason ?? '' }
+  }
+  throw new Error(
+    `The model response did not include a valid decision: ${JSON.stringify(parsed)}`
+  )
 }

@@ -109,7 +109,9 @@ RSpec.describe TddGuardRspec::Formatter do
         create_formatter_in(tmpdir) do |formatter, storage_dir|
           data = run_and_read_json(formatter, storage_dir)
           expect(data["testModules"]).to eq([])
-          expect(data["reason"]).to eq("passed")
+          # No examples actually ran, so the reporter no longer claims
+          # "passed" — see #177.
+          expect(data["reason"]).to eq("interrupted")
         end
       end
     end
@@ -238,13 +240,34 @@ RSpec.describe TddGuardRspec::Formatter do
       end
     end
 
-    it "reports passed when expected count is zero" do
+    it "reports interrupted when expected count is zero and nothing ran" do
+      # An empty `RSpec.describe` (or a `--tag` filter that matches no
+      # examples) collects zero examples. Before #177, this returned
+      # "passed", which silently lied to TDD Guard about a suite that
+      # never executed an assertion.
       Dir.mktmpdir do |tmpdir|
         create_formatter_in(tmpdir) do |formatter, storage_dir|
           formatter.start(build_start_notification(count: 0))
 
           data = run_and_read_json(formatter, storage_dir)
-          expect(data["reason"]).to eq("passed")
+          expect(data["reason"]).to eq("interrupted")
+        end
+      end
+    end
+
+    it "reports failed when an unhandled error is captured (no examples ran)" do
+      # Simulates a SyntaxError in a spec file: RSpec aborts during file
+      # loading, the start callback never fires, but the :message callback
+      # records the error via @unhandled_errors. Reason must reflect the
+      # failure even though @expected_count stays zero (see #177).
+      Dir.mktmpdir do |tmpdir|
+        create_formatter_in(tmpdir) do |formatter, storage_dir|
+          formatter.instance_variable_set(:@unhandled_errors, [
+            { "name" => "SyntaxError", "message" => "Unmatched (" }
+          ])
+
+          data = run_and_read_json(formatter, storage_dir)
+          expect(data["reason"]).to eq("failed")
         end
       end
     end
@@ -417,69 +440,128 @@ RSpec.describe TddGuardRspec::Formatter do
   end
 
   describe "storage directory determination" do
-    it "uses default relative path when no env var set" do
+    it "raises when no env var is set" do
       Dir.mktmpdir do |tmpdir|
         real_tmpdir = File.realpath(tmpdir)
         Dir.chdir(real_tmpdir) do
           ClimateControl.modify("TDD_GUARD_PROJECT_ROOT" => nil) do
-            formatter = described_class.new(StringIO.new)
-            formatter.close(double("notification"))
-
-            json_path = File.join(default_data_dir, "test.json")
-            expect(File.exist?(json_path)).to be true
+            expect { described_class.new(StringIO.new) }
+              .to raise_error(ArgumentError, /must be configured via TDD_GUARD_PROJECT_ROOT/)
           end
         end
       end
     end
 
-    it "rejects relative path in env var" do
+    it "raises when env var is empty" do
       Dir.mktmpdir do |tmpdir|
         real_tmpdir = File.realpath(tmpdir)
         Dir.chdir(real_tmpdir) do
-          ClimateControl.modify("TDD_GUARD_PROJECT_ROOT" => "../some/path") do
-            formatter = described_class.new(StringIO.new)
-            formatter.close(double("notification"))
-
-            json_path = File.join(default_data_dir, "test.json")
-            expect(File.exist?(json_path)).to be true
-            # Should NOT have written to the project root path
-            expect(File.exist?(File.join("../some/path", default_data_dir, "test.json"))).to be false
+          ClimateControl.modify("TDD_GUARD_PROJECT_ROOT" => "") do
+            expect { described_class.new(StringIO.new) }
+              .to raise_error(ArgumentError, /must be configured via TDD_GUARD_PROJECT_ROOT/)
           end
         end
       end
     end
 
-    it "rejects project root when cwd is outside" do
+    it "accepts a relative path" do
       Dir.mktmpdir do |tmpdir|
         real_tmpdir = File.realpath(tmpdir)
         Dir.chdir(real_tmpdir) do
-          ClimateControl.modify("TDD_GUARD_PROJECT_ROOT" => "/other/project") do
+          ClimateControl.modify("TDD_GUARD_PROJECT_ROOT" => ".") do
             formatter = described_class.new(StringIO.new)
             formatter.close(double("notification"))
 
-            json_path = File.join(default_data_dir, "test.json")
+            json_path = File.join(real_tmpdir, default_data_dir, "test.json")
             expect(File.exist?(json_path)).to be true
           end
         end
       end
     end
 
-    it "rejects project root that is a prefix of cwd but not an ancestor" do
+    it "accepts a path containing .." do
+      Dir.mktmpdir do |tmpdir|
+        real_tmpdir = File.realpath(tmpdir)
+        sub_dir = File.join(real_tmpdir, "sub")
+        FileUtils.mkdir_p(sub_dir)
+        Dir.chdir(sub_dir) do
+          ClimateControl.modify("TDD_GUARD_PROJECT_ROOT" => "../") do
+            formatter = described_class.new(StringIO.new)
+            formatter.close(double("notification"))
+
+            json_path = File.join(real_tmpdir, default_data_dir, "test.json")
+            expect(File.exist?(json_path)).to be true
+          end
+        end
+      end
+    end
+
+    it "raises when cwd is outside the project root" do
+      Dir.mktmpdir do |tmpdir|
+        real_tmpdir = File.realpath(tmpdir)
+        Dir.mktmpdir do |outside_dir|
+          real_outside = File.realpath(outside_dir)
+          Dir.chdir(real_tmpdir) do
+            ClimateControl.modify("TDD_GUARD_PROJECT_ROOT" => real_outside) do
+              expect { described_class.new(StringIO.new) }
+                .to raise_error(ArgumentError, /current directory must be within project root/)
+            end
+          end
+        end
+      end
+    end
+
+    it "raises with a path-identifying error when project root does not exist" do
+      Dir.mktmpdir do |tmpdir|
+        real_tmpdir = File.realpath(tmpdir)
+        Dir.chdir(real_tmpdir) do
+          missing = File.join(real_tmpdir, "does", "not", "exist")
+          ClimateControl.modify("TDD_GUARD_PROJECT_ROOT" => missing) do
+            expect { described_class.new(StringIO.new) }
+              .to raise_error(ArgumentError) do |err|
+                expect(err.message).to include("project root does not exist")
+                expect(err.message).to include(missing)
+              end
+          end
+        end
+      end
+    end
+
+    it "resolves storage dir correctly when project root and cwd differ via symlink" do
+      Dir.mktmpdir do |tmpdir|
+        real_outer = File.realpath(tmpdir)
+        real_root = File.join(real_outer, "real_root")
+        FileUtils.mkdir_p(real_root)
+        symlink_root = File.join(real_outer, "sym_root")
+        File.symlink(real_root, symlink_root)
+
+        # cwd reaches the project via the symlink while the env var points
+        # at the canonical real path. canonical_path on both sides should
+        # converge to real_root so cwd_within? still recognises the match.
+        Dir.chdir(symlink_root) do
+          ClimateControl.modify("TDD_GUARD_PROJECT_ROOT" => real_root) do
+            formatter = described_class.new(StringIO.new)
+            formatter.close(double("notification"))
+
+            json_path = File.join(real_root, default_data_dir, "test.json")
+            expect(File.exist?(json_path)).to be true
+          end
+        end
+      end
+    end
+
+    it "raises when project root is a prefix of cwd but not an ancestor" do
       Dir.mktmpdir do |tmpdir|
         real_tmpdir = File.realpath(tmpdir)
         project_dir = File.join(real_tmpdir, "foo")
         similar_dir = File.join(real_tmpdir, "foobar")
+        FileUtils.mkdir_p(project_dir)
         FileUtils.mkdir_p(similar_dir)
 
         Dir.chdir(similar_dir) do
           ClimateControl.modify("TDD_GUARD_PROJECT_ROOT" => project_dir) do
-            formatter = described_class.new(StringIO.new)
-            formatter.close(double("notification"))
-
-            json_path = File.join(default_data_dir, "test.json")
-            expect(File.exist?(json_path)).to be true
-            # Should NOT have written under the project root
-            expect(File.exist?(File.join(project_dir, default_data_dir, "test.json"))).to be false
+            expect { described_class.new(StringIO.new) }
+              .to raise_error(ArgumentError, /current directory must be within project root/)
           end
         end
       end

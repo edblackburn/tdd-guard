@@ -15,9 +15,9 @@ Create a `.env` file in your project root:
 VALIDATION_CLIENT=sdk
 
 # Model version for validation (optional)
-# Default: claude-sonnet-4-0
+# Default: claude-sonnet-4-6
 # See https://docs.anthropic.com/en/docs/about-claude/models/overview
-TDD_GUARD_MODEL_VERSION=claude-sonnet-4-0
+TDD_GUARD_MODEL_VERSION=claude-sonnet-4-6
 
 # Anthropic API Key
 # Required when VALIDATION_CLIENT is set to 'api'

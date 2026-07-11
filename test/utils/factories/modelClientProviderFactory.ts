@@ -1,5 +1,5 @@
 import { ModelClientProvider } from '../../../src/providers/ModelClientProvider'
-import { IModelClient } from '../../../src/contracts/types/ModelClient'
+import { ModelClient } from '../../../src/contracts/types/ModelClient'
 import { Config } from '../../../src/config/Config'
 
 export function modelClientProvider(): ModelClientProvider {
@@ -7,13 +7,13 @@ export function modelClientProvider(): ModelClientProvider {
 }
 
 class MockModelClientProvider extends ModelClientProvider {
-  getModelClient(config?: Config): IModelClient {
+  getModelClient(config?: Config): ModelClient {
     const actualConfig = config ?? new Config()
 
     return {
       ask: async () =>
         JSON.stringify({
-          decision: undefined,
+          decision: null,
           reason: `Using mock model client with modelType: ${actualConfig.modelType}`,
         }),
     }

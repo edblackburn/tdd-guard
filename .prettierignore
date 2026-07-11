@@ -10,7 +10,6 @@ build/
 out/
 .cache/
 public/
-hooks/
 test/artifacts/
 reporters/phpunit/
 reporters/go/**/*.go

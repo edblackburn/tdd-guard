@@ -253,11 +253,10 @@ def test_subtracts_two_numbers():
     content: `import pytest
 from calculator import Calculator
 
-class TestCalculator:
-    def test_adds_two_numbers(self):
-        calculator = Calculator()
-        result = calculator.add(2, 2)
-        assert result == 4
+def test_adds_two_numbers():
+    calculator = Calculator()
+    result = calculator.add(2, 2)
+    assert result == 4
 `,
   },
   emptyTestContainer: {
