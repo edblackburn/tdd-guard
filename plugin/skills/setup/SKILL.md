@@ -25,6 +25,7 @@ Set up TDD Guard for the current project. Your goal is to:
 | Rust      | tdd-guard-rust                                           | crates.io  |
 | RSpec     | tdd-guard-rspec                                          | RubyGems   |
 | Minitest  | tdd-guard-minitest                                       | RubyGems   |
+| .NET      | TddGuard.Dotnet                                          | NuGet      |
 
 ## Reporter configuration
 
@@ -123,6 +124,18 @@ export TDD_GUARD_PROJECT_ROOT="/absolute/path/to/project"
 ```ruby
 # test/test_helper.rb
 require "tdd_guard_minitest/autorun"
+```
+
+```bash
+export TDD_GUARD_PROJECT_ROOT="/absolute/path/to/project"
+```
+
+**.NET** — Add a `PackageReference` to the test project (planned distribution: NuGet.org, published by the maintainer). The extension registers automatically via `buildTransitive` props — no manual hook code needed. Set `TDD_GUARD_PROJECT_ROOT` to the absolute project root path.
+
+```xml
+<ItemGroup>
+  <PackageReference Include="TddGuard.Dotnet" Version="*" />
+</ItemGroup>
 ```
 
 ```bash
