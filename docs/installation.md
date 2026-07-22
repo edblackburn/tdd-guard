@@ -259,6 +259,26 @@ test:
 
 **Note:** The reporter acts as a filter that passes test output through unchanged while capturing results for TDD Guard. See the [Rust reporter configuration](../reporters/rust/README.md#configuration) for more details.
 
+### .NET
+
+Planned distribution: NuGet.org (published by the maintainer).
+
+Add a `PackageReference` to your test project:
+
+```xml
+<ItemGroup>
+  <PackageReference Include="TddGuard.Dotnet" Version="*" />
+</ItemGroup>
+```
+
+Then run `dotnet test`:
+
+```bash
+dotnet test
+```
+
+**Note:** Unlike the Go and Rust reporters, this is a Microsoft Testing Platform (MTP) V2 extension that registers automatically via `buildTransitive` props — no piping test output through a filter is needed. Works with TUnit, MSTest, xUnit, NUnit, and other MTP V2 frameworks. See the [.NET reporter configuration](../reporters/dotnet/README.md#configuration) for more details.
+
 ## Troubleshooting
 
 ### Hooks not working
