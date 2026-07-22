@@ -72,6 +72,7 @@ If you installed TDD Guard as a [plugin](../plugin/README.md), hooks are configu
 - **PHP**: See [PHPUnit reporter configuration](../reporters/phpunit/README.md#configuration)
 - **Go**: See [Go reporter configuration](../reporters/go/README.md#configuration)
 - **Rust**: See [Rust reporter configuration](../reporters/rust/README.md#configuration)
+- **.NET**: See [.NET reporter configuration](../reporters/dotnet/README.md#configuration)
 
 ## Custom Validation Rules
 
