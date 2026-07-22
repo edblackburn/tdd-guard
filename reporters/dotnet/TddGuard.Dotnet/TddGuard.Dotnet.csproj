@@ -8,6 +8,9 @@
     <Version>0.1.0-local</Version>
     <Description>TDD Guard test reporter for Microsoft Testing Platform V2</Description>
     <Authors>Ed Blackburn</Authors>
+    <PackageTags>testing;tdd;test-driven-development;mtp;testing-platform;claude</PackageTags>
+    <RepositoryUrl>https://github.com/nizos/tdd-guard</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
     <IsPackable>true</IsPackable>
   </PropertyGroup>
 
