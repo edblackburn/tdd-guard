@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PackageId>TddGuard.Dotnet</PackageId>
-    <Version>0.1.0-local</Version>
+    <Version>0.1.0</Version>
     <Description>TDD Guard test reporter for Microsoft Testing Platform V2</Description>
     <Authors>Ed Blackburn</Authors>
     <PackageTags>testing;tdd;test-driven-development;mtp;testing-platform;claude</PackageTags>
