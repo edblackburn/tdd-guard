@@ -7,6 +7,8 @@
     <IsPackable>true</IsPackable>
     <Version>0.1.0-local</Version>
     <Authors>Ed Blackburn</Authors>
+    <RepositoryUrl>https://github.com/nizos/tdd-guard</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
   <ItemGroup>
