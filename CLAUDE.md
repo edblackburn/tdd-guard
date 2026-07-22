@@ -30,6 +30,7 @@ The codebase is organized with core functionality in src/ and language-specific 
 
 ```
 reporters/                        # Language-specific test reporters
+├── dotnet/                       # TddGuard.Dotnet - .NET reporter (NuGet)
 ├── go/                           # tdd-guard-go - Go test reporter
 ├── jest/                         # tdd-guard-jest - Jest reporter (npm)
 ├── minitest/                     # tdd-guard-minitest - Minitest reporter (gem)
@@ -67,7 +68,7 @@ docs/                             # Documentation (ADRs, configuration, etc.)
 TDD Guard is organized as a TypeScript project with integrated language-specific reporters:
 
 - **src/**: Core functionality including contracts, config, storage, and validation
-- **reporters/**: Language-specific test reporters (go, jest, minitest, phpunit, pytest, rspec, rust, storybook, vitest)
+- **reporters/**: Language-specific test reporters (dotnet, go, jest, minitest, phpunit, pytest, rspec, rust, storybook, vitest)
 - **test/**: Comprehensive test suite with integration tests and utilities
 
 ### Testing
