@@ -17,3 +17,5 @@ reporters/go/**/*.mod
 reporters/go/**/*.sum
 reporters/go/**/*.tsbuildinfo
 reporters/test/factories/go.ts
+reporters/dotnet/**/bin/
+reporters/dotnet/**/obj/
