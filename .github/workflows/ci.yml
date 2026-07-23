@@ -223,6 +223,15 @@ jobs:
         working-directory: reporters/junit5
         run: ./gradlew check jar --no-daemon
 
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0'
+
+      - name: Build dotnet reporter
+        working-directory: reporters/dotnet
+        run: dotnet build -c Release
+
       - name: Run reporter tests
         run: npm run test:reporters
 
