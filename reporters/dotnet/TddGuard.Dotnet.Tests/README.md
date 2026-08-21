@@ -59,18 +59,26 @@ and catch edge cases a person would never consider.
 
 ### Supporting test files
 
-| File                       | Purpose                                                            |
-| -------------------------- | ------------------------------------------------------------------ |
-| `ProjectRootResolverTests` | Unit tests for env var resolution (pure function, tested directly) |
-| `ReportFileWriterTests`    | Unit tests for file I/O (temp dir, error paths, overwrite)         |
-| `DiagnosticDecoratorTests` | Unit tests for logging decorators (spy-based)                      |
-| `TestReportWriterTests`    | Unit tests for the write-or-skip orchestrator                      |
-| `TestNodeMapperTests`      | Unit tests for UID parsing (pure function)                         |
-| `TddGuardBuilderTests`     | Unit tests for the MTP registration composition root               |
+| File                         | Purpose                                                                            |
+| ---------------------------- | ---------------------------------------------------------------------------------- |
+| `ProjectRootResolutionTests` | Registration outcome (enabled / disabled-with-reason) across env var and cwd cases |
+| `ReportFileWriterTests`      | Unit tests for file I/O (temp dir, error paths, overwrite, concurrent writers)     |
+| `TestReportWriterTests`      | Unit tests for the write-or-skip orchestrator (empty results → `Skipped`)          |
+| `TestNodeMapperTests`        | Unit tests for the pure `TestIdentity` → name/module mapping                       |
+| `TddGuardBuilderTests`       | Registration against a real MTP host: succeeds, or reports why it disabled itself  |
 
-These test lower-level components directly because their contracts are stable
-public APIs (file paths, env vars, JSON output). They don't test internal
-wiring — that's covered by the outside-in listener tests and PBTs.
+`ReportFileWriterTests` and `TestNodeMapperTests` call `public` functions in
+`TddGuard.Dotnet.Core` directly — those are stable, framework-agnostic
+contracts (file paths, JSON output, a pure mapping function) with nothing MTP
+about them to fake.
+
+`ProjectRootResolutionTests` and `TddGuardBuilderTests` are different:
+`ProjectRootResolver` itself is `internal` to `TddGuard.Dotnet`, reachable
+from these tests only by driving `TddGuardBuilder.Register` against a real
+`TestApplication.CreateBuilderAsync([])` and reading the diagnostic message
+it logs. See "Why `internal`, and why not `InternalsVisibleTo`" below —
+this isn't a workaround for a type that should have been made visible, it's
+the deliberate, narrower seam.
 
 ## Test infrastructure
 
@@ -195,10 +203,47 @@ This matters because:
   the JSON output. Do not reference `CollectedResult`, `TestRunOutput`,
   `Summarise`, or `Serialize` in test assertions. Those are internals.
 
-The supporting tests (`ProjectRootResolverTests`, `ReportFileWriterTests`,
-etc.) test lower-level components directly because their contracts are
-stable public boundaries (env vars, file paths, JSON structure). They
-follow the same principle: test through the public API, not the internals.
+The supporting tests (`ReportFileWriterTests`, `TestNodeMapperTests`, etc.)
+test lower-level components directly because their contracts are stable
+public boundaries (env vars, file paths, JSON structure). They follow the
+same principle: test through the public API, not the internals.
+
+## Why `internal`, and why not `InternalsVisibleTo`
+
+`ProjectRootResolutionTests` used to call `ProjectRootResolver.Resolve(...)`
+directly — it was `public`, in `TddGuard.Dotnet.Core`. It is now `internal`,
+moved into `TddGuard.Dotnet`, and the tests reach it only through
+`TddGuardBuilder.Register`.
+
+The obvious fix for a test that can no longer see the type it used to call
+is `[assembly: InternalsVisibleTo("TddGuard.Dotnet.Tests")]`. That was
+considered and rejected for this boundary specifically: `internal` is the
+compiler enforcing "nothing outside this assembly depends on this", and a
+friend-assembly declaration exists to make that untrue for exactly the
+assembly most likely to accumulate a dependency on internals if given the
+chance — the test project. Granting it here doesn't just unblock these
+tests; it establishes that reaching for `InternalsVisibleTo` is an
+acceptable response to "the test can't see the type", which is a much
+easier habit to fall into than to walk back once every future internal type
+has this one as precedent.
+
+`ProjectRootResolver` became `internal` because it stopped being a contract
+anyone outside this assembly should depend on — it is _how_ the reporter
+finds its output directory, not _whether_ it found one, and "whether" is
+exactly what `TddGuardBuilder.Register`'s `LogDiagnostic` parameter already
+exposes. `ProjectRootResolutionTests` drives that entry point against a
+real `TestApplication.CreateBuilderAsync([])` and asserts on the message it
+logs when it disables itself — the same behaviour the old direct-call tests
+asserted, reached through the seam a consumer actually has, instead of one
+that only existed because nothing had removed it yet.
+
+The honest cost: these tests now construct a real MTP builder per case, and
+a bug inside `Resolve` surfaces one call frame further from the assertion
+that catches it than a direct unit test would put it. That's a real
+trade-off, made deliberately — narrowing the visibility of a type this
+rarely touched was judged worth a slightly less direct test, rather than
+keeping the type `public` (or `InternalsVisibleTo`-friend) purely so the
+test could stay as close to it as before.
 
 ## Running tests
 
