@@ -34,7 +34,18 @@ public static class ReportFileWriter
 
                 var json = output.Serialize();
                 File.WriteAllText(tempPath, json);
-                File.Move(tempPath, targetPath, overwrite: true);
+
+                try
+                {
+                    File.Move(tempPath, targetPath, overwrite: true);
+                }
+                catch
+                {
+                    // Nothing reads the temp file once the move that would have
+                    // published it has failed, so it must not outlive this attempt.
+                    File.Delete(tempPath);
+                    throw;
+                }
 
                 return new WriteResult.Success();
             }

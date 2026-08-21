@@ -103,6 +103,27 @@ internal sealed class ReportFileWriterTests
         });
     }
 
+    // A failed move must not leave the temp file behind: nothing ever reads it, and it
+    // would otherwise accumulate under repeated failures to the same broken target.
+    [Test("removes the temp file when the report cannot be moved into place")]
+    public async Task RemovesTempFileWhenMoveFails()
+    {
+        await TempDir.Run(async tempDir =>
+        {
+            var dataDir = Path.Combine(tempDir, ".claude", "tdd-guard", "data");
+            var targetPath = Path.Combine(dataDir, "test.json");
+            Directory.CreateDirectory(targetPath); // occupies the target path as a directory, so the move fails
+
+            var write = ReportFileWriter.Create(tempDir);
+            var result = write(MakePassingOutput());
+
+            await Assert.That(result is WriteResult.Error).IsTrue();
+
+            var leftoverTempFiles = Directory.GetFiles(dataDir, "test.json.*.tmp");
+            await Assert.That(leftoverTempFiles).IsEmpty();
+        });
+    }
+
     private static TestRunOutput MakePassingOutput()
         => MakeOutputWithReason("passed");
 
