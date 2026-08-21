@@ -9,12 +9,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="FsCheck" Version="3.*" />
-    <PackageReference Include="TUnit" Version="0.*" />
+    <PackageReference Include="FsCheck" Version="3.3.4" />
+    <PackageReference Include="TUnit" Version="1.65.31" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../TddGuard.Dotnet/TddGuard.Dotnet.csproj" />
+    <!-- TddGuard.Dotnet excludes Core from its transitive references (PrivateAssets="all",
+         since Core's output is embedded into TddGuard.Dotnet's package rather than
+         referenced as a dependency), so Core's types must be referenced directly here. -->
+    <ProjectReference Include="../TddGuard.Dotnet.Core/TddGuard.Dotnet.Core.csproj" />
   </ItemGroup>
 
   <!-- Register TDD Guard extension hook with MTP's SelfRegisteredExtensions codegen -->

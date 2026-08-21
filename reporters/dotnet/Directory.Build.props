@@ -5,6 +5,9 @@
     <AnalysisLevel>latest-All</AnalysisLevel>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Single source of truth for the package/assembly version. Update here only;
+         TddGuardListener.Version reads it back at runtime via assembly metadata. -->
+    <Version>0.1.0</Version>
   </PropertyGroup>
 
 </Project>

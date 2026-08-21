@@ -9,7 +9,7 @@ dotnet_diagnostic.CA1716.severity = none
 # Serialization class name conflict with System.ComponentModel.Design.Serialization is not a real concern
 dotnet_diagnostic.CA1724.severity = none
 
-# TestResultsWriter intentionally catches all exceptions to convert to WriteResult.Error
+# ReportFileWriter intentionally catches all exceptions to convert to WriteResult.Error
 dotnet_diagnostic.CA1031.severity = none
 
 # DataTypesConsumed is an MTP interface that requires returning Type[]

@@ -91,6 +91,7 @@ Verified with smoke tests in `TddGuard.Dotnet.Compat.*` projects:
 ## Project structure
 
 ```
+TddGuard.Dotnet.slnx         Solution referencing all projects below
 TddGuard.Dotnet.Core/       Domain types and pure functions (no MTP dependency)
 TddGuard.Dotnet/             MTP V2 extension (listener, builder, hook)
 TddGuard.Dotnet.Tests/       Unit tests, property-based tests, test infrastructure

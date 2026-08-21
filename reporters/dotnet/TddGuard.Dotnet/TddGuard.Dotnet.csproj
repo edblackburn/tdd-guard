@@ -5,7 +5,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PackageId>TddGuard.Dotnet</PackageId>
-    <Version>0.1.0</Version>
     <Description>TDD Guard test reporter for Microsoft Testing Platform V2</Description>
     <Authors>Ed Blackburn</Authors>
     <PackageTags>testing;tdd;test-driven-development;mtp;testing-platform;claude</PackageTags>
@@ -15,16 +14,29 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Testing.Platform" Version="2.0.1" />
+    <PackageReference Include="Microsoft.Testing.Platform" Version="2.3.3" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../TddGuard.Dotnet.Core/TddGuard.Dotnet.Core.csproj" />
+    <!-- Core is not independently published; its output is merged into this
+         package below, so it must not appear as a NuGet dependency. -->
+    <ProjectReference Include="../TddGuard.Dotnet.Core/TddGuard.Dotnet.Core.csproj" PrivateAssets="all" />
   </ItemGroup>
 
   <!-- Include MSBuild props for auto-registration in consuming projects -->
   <ItemGroup>
     <None Include="buildTransitive/**/*.props" Pack="true" PackagePath="buildTransitive" />
   </ItemGroup>
+
+  <!-- Embed TddGuard.Dotnet.Core's build output into this package, since Core
+       is IsPackable=false and only exists as an internal implementation
+       detail of this package (see Core's csproj and reporters/dotnet/README.md). -->
+  <Target Name="AddCoreOutputToPackage" BeforeTargets="_GetPackageFiles">
+    <ItemGroup>
+      <_CoreOutputFiles Include="../TddGuard.Dotnet.Core/bin/$(Configuration)/$(TargetFramework)/TddGuard.Dotnet.Core.dll" />
+      <_CoreOutputFiles Include="../TddGuard.Dotnet.Core/bin/$(Configuration)/$(TargetFramework)/TddGuard.Dotnet.Core.pdb" Condition="Exists('../TddGuard.Dotnet.Core/bin/$(Configuration)/$(TargetFramework)/TddGuard.Dotnet.Core.pdb')" />
+      <None Include="@(_CoreOutputFiles)" Pack="true" PackagePath="lib/$(TargetFramework)" />
+    </ItemGroup>
+  </Target>
 
 </Project>

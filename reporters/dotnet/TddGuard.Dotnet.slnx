@@ -1,0 +1,10 @@
+<Solution>
+  <Project Path="TddGuard.Dotnet.Compat.MSTest/TddGuard.Dotnet.Compat.MSTest.csproj" />
+  <Project Path="TddGuard.Dotnet.Compat.NUnit/TddGuard.Dotnet.Compat.NUnit.csproj" />
+  <Project Path="TddGuard.Dotnet.Compat.TUnit/TddGuard.Dotnet.Compat.TUnit.csproj" />
+  <Project Path="TddGuard.Dotnet.Compat.XUnit/TddGuard.Dotnet.Compat.XUnit.csproj" />
+  <Project Path="TddGuard.Dotnet.Compat.XUnit2/TddGuard.Dotnet.Compat.XUnit2.csproj" />
+  <Project Path="TddGuard.Dotnet.Core/TddGuard.Dotnet.Core.csproj" />
+  <Project Path="TddGuard.Dotnet.Tests/TddGuard.Dotnet.Tests.csproj" />
+  <Project Path="TddGuard.Dotnet/TddGuard.Dotnet.csproj" />
+</Solution>
