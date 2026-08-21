@@ -46,8 +46,11 @@ public abstract record TestIdentity
 
     /// <summary>
     /// Nothing qualified was supplied — typically only a digest or a bare label.
+    /// <see cref="Uid"/> is what the report distinguishes tests by: MTP documents the
+    /// node UID as unique per test, a guarantee the display name does not carry, and
+    /// two tests can otherwise share an identical unqualified label.
     /// </summary>
-    public sealed record Unqualified(string Value) : TestIdentity;
+    public sealed record Unqualified(string Uid, string DisplayName) : TestIdentity;
 }
 
 /// <summary>

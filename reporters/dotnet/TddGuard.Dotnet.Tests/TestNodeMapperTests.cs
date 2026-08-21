@@ -55,18 +55,30 @@ internal sealed class TestNodeMapperTests
         await Assert.That(result.Name).IsEqualTo("Should_add");
     }
 
-    // Nothing can be split out of an unqualified value, so it stands as both names
-    // rather than being carved up on punctuation that carries no meaning.
-    [Test("reports an unqualified value unchanged as both names")]
-    public async Task ReportsUnqualifiedValueUnchanged()
+    // The display name carries no uniqueness guarantee and cannot be split into
+    // anything more specific, so it stands as the short name unchanged. The full name
+    // reports the node UID instead, since that is what MTP guarantees unique per test.
+    [Test("reports an unqualified display name as the short name, and the UID as the full name")]
+    public async Task ReportsUnqualifiedDisplayNameAsShortNameAndUidAsFullName()
     {
         var result = An.Node()
-            .Unqualified("adds numbers correctly. handles zero")
+            .Unqualified("6cdcb5546dc9", "adds numbers correctly. handles zero")
             .Build()
             .ToCollectedResult(Root);
 
-        await Assert.That(result.FullName).IsEqualTo("adds numbers correctly. handles zero");
+        await Assert.That(result.FullName).IsEqualTo("6cdcb5546dc9");
         await Assert.That(result.Name).IsEqualTo("adds numbers correctly. handles zero");
+    }
+
+    // Two tests can report the same unqualified display name (a generic label, or a
+    // framework quirk); the UID is what keeps their full names from colliding.
+    [Test("gives two unqualified tests sharing a display name distinct full names")]
+    public async Task GivesUnqualifiedTestsSharingADisplayNameDistinctFullNames()
+    {
+        var first = An.Node().Unqualified("6cdcb5546dc9", "should add").Build().ToCollectedResult(Root);
+        var second = An.Node().Unqualified("8f31a02b7e14", "should add").Build().ToCollectedResult(Root);
+
+        await Assert.That(first.FullName).IsNotEqualTo(second.FullName);
     }
 
     [Test("reports the module id relative to the project root")]
@@ -129,16 +141,31 @@ internal sealed class TestNodeMapperTests
         await Assert.That(result.ModuleId).IsEqualTo("Acme.Widgets.Tests.WidgetTests");
     }
 
-    [Test("uses an unqualified value as its own module when there is no file")]
+    [Test("uses an unqualified UID as its own module when it carries no separator and there is no file")]
     public async Task UsesUnqualifiedValueAsItsOwnModule()
     {
         var result = An.Node()
-            .Unqualified("Should_add")
+            .Unqualified("6cdcb5546dc9", "Should_add")
             .WithNoFile()
             .Build()
             .ToCollectedResult(Root);
 
-        await Assert.That(result.ModuleId).IsEqualTo("Should_add");
+        await Assert.That(result.ModuleId).IsEqualTo("6cdcb5546dc9");
+    }
+
+    // A realistic UID carries the assembly/class path MTP builds it from; grouping by
+    // its declaring scope keeps such tests together, the same as the other identity
+    // shapes, rather than giving each one a module of its own.
+    [Test("groups by declaring scope when an unqualified UID carries a separator and there is no file")]
+    public async Task GroupsByDeclaringScopeWhenUnqualifiedUidHasNoFile()
+    {
+        var result = An.Node()
+            .Unqualified("assembly/TestClass/6cdcb5546dc9", "should add")
+            .WithNoFile()
+            .Build()
+            .ToCollectedResult(Root);
+
+        await Assert.That(result.ModuleId).IsEqualTo("assembly/TestClass");
     }
 
     [Test("carries the test state through unchanged")]

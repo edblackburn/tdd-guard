@@ -625,6 +625,35 @@ internal sealed class TddGuardListenerTests
             });
     }
 
+    // Neither string carries a separator, so Classify cannot tell these two tests apart
+    // by punctuation alone. The node UID is documented by MTP as unique per test node,
+    // so distinguishing on it — rather than the unqualified display name, which carries
+    // no such guarantee — is what keeps unrelated tests from merging into one report.
+    [Test("distinguishes two unqualified tests that share a display name")]
+    public async Task DistinguishesUnqualifiedTestsSharingADisplayName()
+    {
+        await ListenerFixture
+            .Arrange(async listener =>
+            {
+                TestNode NodeNamed(string uid) => new()
+                {
+                    Uid = new TestNodeUid(uid),
+                    DisplayName = "should add",
+                    Properties = new PropertyBag(new PassedTestNodeStateProperty()),
+                };
+
+                await listener.ConsumeAsync(StubProducer(), new TestNodeUpdateMessage(default, NodeNamed("6cdcb5546dc9")), default);
+                await listener.ConsumeAsync(StubProducer(), new TestNodeUpdateMessage(default, NodeNamed("8f31a02b7e14")), default);
+            })
+            .Act()
+            .Assert(async root =>
+            {
+                var firstFullName = root.Module(0).Test().FullName();
+                var secondFullName = root.Module(1).Test().FullName();
+                await Assert.That(firstFullName).IsNotEqualTo(secondFullName);
+            });
+    }
+
     // A failed write is the one outcome the developer cannot see for themselves: the
     // hook reads a stale test.json, or none, and the reason has to reach stderr or the
     // reporter has silently stopped guarding. This drives the real listener and the real

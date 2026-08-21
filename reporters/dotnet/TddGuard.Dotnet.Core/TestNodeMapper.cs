@@ -30,7 +30,9 @@ public static class TestNodeMapper
             TestIdentity.Structured s => Qualify(s.Namespace, s.TypeName, s.MethodName),
             TestIdentity.QualifiedName q => q.Value,
             TestIdentity.QualifiedIdentifier q => q.Value,
-            TestIdentity.Unqualified u => u.Value,
+            // The UID, not the display name: MTP guarantees the UID unique per test,
+            // so it is what keeps two unqualified tests sharing a label from merging.
+            TestIdentity.Unqualified u => u.Uid,
             // Unreachable: TestIdentity's constructor is private and its variants are
             // sealed. See TestRunSummariser for why the arm is still required.
             _ => throw new InvalidOperationException($"Unknown TestIdentity: {identity}"),
@@ -46,7 +48,7 @@ public static class TestNodeMapper
             TestIdentity.Structured s => s.MethodName,
             TestIdentity.QualifiedName q => LastSegment(q.Value),
             TestIdentity.QualifiedIdentifier q => q.MemberName,
-            TestIdentity.Unqualified u => u.Value,
+            TestIdentity.Unqualified u => u.DisplayName,
             _ => throw new InvalidOperationException($"Unknown TestIdentity: {identity}"),
         };
 

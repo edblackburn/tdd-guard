@@ -35,9 +35,9 @@ internal sealed class TestNodeInputBuilder
     }
 
     /// <summary>The framework supplied nothing qualified — a digest or a bare label.</summary>
-    internal TestNodeInputBuilder Unqualified(string value)
+    internal TestNodeInputBuilder Unqualified(string uid, string displayName)
     {
-        _identity = new TestIdentity.Unqualified(value);
+        _identity = new TestIdentity.Unqualified(uid, displayName);
         return this;
     }
 

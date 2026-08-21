@@ -134,7 +134,7 @@ public sealed class TddGuardListener(WriteTestOutput writeOutput, MapTestNode ma
             return new TestIdentity.QualifiedIdentifier(uid, displayName);
 
         return new TestIdentity.Unqualified(
-            !string.IsNullOrEmpty(displayName) ? displayName : uid);
+            uid, !string.IsNullOrEmpty(displayName) ? displayName : uid);
     }
 
     /// <summary>
