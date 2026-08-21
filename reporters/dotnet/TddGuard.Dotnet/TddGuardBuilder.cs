@@ -30,8 +30,8 @@ public static class TddGuardBuilder
                 var write = ReportFileWriter.Create(root.Path)
                     .WithDiagnostics(diagnose);
                 var compositeFactory = new CompositeExtensionFactory<TddGuardListener>(
-                    () => new TddGuardListener(write));
-                builder.TestHost.AddTestSessionLifetimeHandle(compositeFactory);
+                    () => new TddGuardListener(write, root.Path));
+                builder.TestHost.AddTestSessionLifetimeHandler(compositeFactory);
                 builder.TestHost.AddDataConsumer(compositeFactory);
             },
             error => { } // Disabled — already logged by LogOnError

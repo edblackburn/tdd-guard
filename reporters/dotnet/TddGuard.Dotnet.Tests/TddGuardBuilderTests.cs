@@ -8,6 +8,7 @@ using Microsoft.Testing.Platform.Extensions.TestHost;
 using Microsoft.Testing.Platform.Logging;
 using Microsoft.Testing.Platform.TestHost;
 using Microsoft.Testing.Platform.TestHostControllers;
+using Microsoft.Testing.Platform.TestHostOrchestrator;
 
 namespace TddGuard.Dotnet.Tests;
 
@@ -120,7 +121,7 @@ internal sealed class TddGuardBuilderTests
         await Assert.That(method).IsNotNull();
         await Assert.That(method!.IsPublic).IsTrue();
         await Assert.That(method.IsStatic).IsTrue();
-        await Assert.That(method.GetParameters()).HasCount().EqualTo(2);
+        await Assert.That(method.GetParameters()).Count().IsEqualTo(2);
     }
 
     private sealed class SpyTestHostManager : ITestHostManager
@@ -135,10 +136,19 @@ internal sealed class TddGuardBuilderTests
             where T : class, IDataConsumer
             => DataConsumerCount++;
 
+#pragma warning disable CS0618 // ITestHostManager still requires these obsolete overloads
         public void AddTestSessionLifetimeHandle(Func<IServiceProvider, ITestSessionLifetimeHandler> testSessionLifetimeHandleFactory)
             => LifetimeHandleCount++;
 
         public void AddTestSessionLifetimeHandle<T>(CompositeExtensionFactory<T> compositeServiceFactory)
+            where T : class, ITestSessionLifetimeHandler
+            => LifetimeHandleCount++;
+#pragma warning restore CS0618
+
+        public void AddTestSessionLifetimeHandler(Func<IServiceProvider, ITestSessionLifetimeHandler> testSessionLifetimeHandleFactory)
+            => LifetimeHandleCount++;
+
+        public void AddTestSessionLifetimeHandler<T>(CompositeExtensionFactory<T> compositeServiceFactory)
             where T : class, ITestSessionLifetimeHandler
             => LifetimeHandleCount++;
 
@@ -152,6 +162,7 @@ internal sealed class TddGuardBuilderTests
         public ITestHostControllersManager TestHostControllers => throw new NotImplementedException();
         public ICommandLineManager CommandLine => throw new NotImplementedException();
 #pragma warning disable TPEXP // Experimental API required by ITestApplicationBuilder
+        public ITestHostOrchestratorManager TestHostOrchestrator => throw new NotImplementedException();
         public IConfigurationManager Configuration => throw new NotImplementedException();
         public ILoggingManager Logging => throw new NotImplementedException();
 #pragma warning restore TPEXP

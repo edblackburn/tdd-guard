@@ -137,6 +137,6 @@ internal static class ListenerFixture
             getEnv ?? (_ => tempDir),
             getCwd ?? (() => tempDir)).AsT0; // Safe in test harness — always valid
         var write = ReportFileWriter.Create(root.Path);
-        return new Dotnet.TddGuardListener(write);
+        return new Dotnet.TddGuardListener(write, root.Path);
     }
 }

@@ -53,6 +53,24 @@ internal sealed class TestEventBuilder
     internal TestNodeUpdateMessage ErrorBare()
         => MtpStubs.MakeTestUpdate(_name, new ErrorTestNodeStateProperty(), _filePath);
 
+    internal TestNodeUpdateMessage TimedOut(string message)
+        => MtpStubs.MakeTestUpdate(_name,
+            new TimeoutTestNodeStateProperty(new InvalidOperationException(message), message), _filePath);
+
+    internal TestNodeUpdateMessage TimedOutBare()
+        => MtpStubs.MakeTestUpdate(_name, new TimeoutTestNodeStateProperty(), _filePath);
+
+    // CancelledTestNodeStateProperty is obsolete but still simulates a test framework
+    // that emits it, exercising TddGuardListener's fail-closed catch-all path.
+#pragma warning disable MTP0001
+    internal TestNodeUpdateMessage Cancelled(string message)
+        => MtpStubs.MakeTestUpdate(_name,
+            new CancelledTestNodeStateProperty(new InvalidOperationException(message), message), _filePath);
+
+    internal TestNodeUpdateMessage CancelledBare()
+        => MtpStubs.MakeTestUpdate(_name, new CancelledTestNodeStateProperty(), _filePath);
+#pragma warning restore MTP0001
+
     internal TestNodeUpdateMessage InProgress()
         => MtpStubs.MakeTestUpdate(_name, new InProgressTestNodeStateProperty(), _filePath);
 
@@ -61,9 +79,13 @@ internal sealed class TestEventBuilder
 }
 
 /// <summary>
-/// Entry point for the Test Data Builder: <c>An.Event().Named("x").Passed()</c>
+/// Entry point for the Test Data Builders:
+/// <c>An.Event().Named("x").Passed()</c> for MTP messages,
+/// <c>An.Node().WithUid("x").Build()</c> for Core inputs.
 /// </summary>
 internal static class An
 {
     internal static TestEventBuilder Event() => new();
+
+    internal static TestNodeInputBuilder Node() => new();
 }

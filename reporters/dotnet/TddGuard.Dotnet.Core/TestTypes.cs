@@ -16,10 +16,22 @@ public abstract record TestState
 public record TestEntryError(string Message);
 
 /// <summary>
+/// The declaring location of a test method, as reported by the test framework.
+/// Frameworks differ in what they supply: MSTest, xUnit v3 and TUnit populate this,
+/// while NUnit and xUnit v2 do not.
+/// </summary>
+public record TestMethodIdentifier(string Namespace, string TypeName, string MethodName);
+
+/// <summary>
 /// Raw input from the MTP test node, before module grouping.
 /// Decoupled from MTP types so Core has no platform dependency.
 /// </summary>
-public record TestNodeInput(string Uid, string DisplayName, string? FilePath, TestState State);
+public record TestNodeInput(
+    string Uid,
+    string DisplayName,
+    string? FilePath,
+    TestState State,
+    TestMethodIdentifier? MethodIdentifier = null);
 
 /// <summary>
 /// Processed test result after UID parsing and module assignment.

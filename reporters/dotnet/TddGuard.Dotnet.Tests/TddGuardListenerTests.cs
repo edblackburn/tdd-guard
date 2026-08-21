@@ -123,8 +123,10 @@ internal sealed class TddGuardListenerTests
             });
     }
 
-    [Test("falls back to UID as module ID")]
-    public async Task FallsBackToUidAsModuleId()
+    // Frameworks that supply no file location (NUnit, xUnit v2) must still group
+    // into a meaningful module rather than one module per test.
+    [Test("falls back to the declaring type as module ID when no file path is present")]
+    public async Task FallsBackToDeclaringTypeAsModuleId()
     {
         await ListenerFixture
             .Arrange(async listener =>
@@ -134,21 +136,33 @@ internal sealed class TddGuardListenerTests
             .Act()
             .Assert(async root =>
             {
-                await Assert.That(root.Module().ModuleId()).Contains("assembly/TestClass/test1");
+                await Assert.That(root.Module().ModuleId()).IsEqualTo("assembly/TestClass");
+                await Assert.That(root.Module().Test().FullName()).IsEqualTo("assembly/TestClass/test1");
             });
     }
 
-    [Test("strips parameters from UID")]
-    public async Task StripsParametersFromUid()
+    // MSTest emits a GUID, xUnit v3 a SHA-256 and xUnit v2 a SHA-1 as the node UID,
+    // so an opaque UID must never reach test.json as the full name.
+    [Test("prefers the structured method identifier over an opaque UID")]
+    public async Task PrefersMethodIdentifierOverOpaqueUid()
     {
         await ListenerFixture
             .Arrange(async listener =>
             {
                 var node = new TestNode
                 {
-                    Uid = new TestNodeUid("assembly/TestClass/TestMethod(1, 2)"),
-                    DisplayName = "TestMethod",
-                    Properties = new PropertyBag(new PassedTestNodeStateProperty()),
+                    Uid = new TestNodeUid("65964d4e887280606a1ad75414c458b8910c3e2c7fb4dde0575f5209b48a4dd4"),
+                    DisplayName = "Should_add_numbers",
+                    Properties = new PropertyBag(
+                        new PassedTestNodeStateProperty(),
+                        new TestMethodIdentifierProperty(
+                            assemblyFullName: "Acme.Tests",
+                            @namespace: "Acme.Tests",
+                            typeName: "CalculatorTests",
+                            methodName: "Should_add_numbers",
+                            methodArity: 0,
+                            parameterTypeFullNames: [],
+                            returnTypeFullName: "System.Void")),
                 };
                 var update = new TestNodeUpdateMessage(default, node);
                 await listener.ConsumeAsync(StubProducer(), update, default);
@@ -156,7 +170,9 @@ internal sealed class TddGuardListenerTests
             .Act()
             .Assert(async root =>
             {
-                await Assert.That(root.Module().Test().FullName()).IsEqualTo("assembly/TestClass/TestMethod");
+                await Assert.That(root.Module().Test().FullName())
+                    .IsEqualTo("Acme.Tests.CalculatorTests.Should_add_numbers");
+                await Assert.That(root.Module().ModuleId()).IsEqualTo("Acme.Tests.CalculatorTests");
             });
     }
 
@@ -213,6 +229,74 @@ internal sealed class TddGuardListenerTests
                 var test = root.Module().Test();
                 await Assert.That(test.State()).IsEqualTo("failed");
                 await Assert.That(test.ErrorMessage()).Contains("setup exploded");
+            });
+    }
+
+    [Test("maps timeout state to failed")]
+    public async Task MapsTimeoutStateToFailed()
+    {
+        await ListenerFixture
+            .Arrange(async listener =>
+            {
+                await listener.ConsumeAsync(StubProducer(), An.Event().Named("test1").TimedOut("exceeded 30s"), default);
+            })
+            .Act()
+            .Assert(async root =>
+            {
+                var test = root.Module().Test();
+                await Assert.That(test.State()).IsEqualTo("failed");
+                await Assert.That(test.ErrorMessage()).Contains("exceeded 30s");
+            });
+    }
+
+    [Test("maps cancelled state to failed with the cancellation message")]
+    public async Task MapsCancelledStateToFailed()
+    {
+        await ListenerFixture
+            .Arrange(async listener =>
+            {
+                await listener.ConsumeAsync(StubProducer(), An.Event().Named("test1").Cancelled("run was cancelled"), default);
+            })
+            .Act()
+            .Assert(async root =>
+            {
+                var test = root.Module().Test();
+                await Assert.That(test.State()).IsEqualTo("failed");
+                await Assert.That(test.ErrorMessage()).Contains("run was cancelled");
+            });
+    }
+
+    [Test("timeout with no exception and no explanation produces empty errors array")]
+    public async Task TimeoutWithNoExceptionNoExplanationProducesEmptyErrorsArray()
+    {
+        await ListenerFixture
+            .Arrange(async listener =>
+            {
+                await listener.ConsumeAsync(StubProducer(), An.Event().Named("test1").TimedOutBare(), default);
+            })
+            .Act()
+            .Assert(async root =>
+            {
+                var test = root.Module().Test();
+                await Assert.That(test.State()).IsEqualTo("failed");
+                await Assert.That(test.GetProperty("errors").GetArrayLength()).IsEqualTo(0);
+            });
+    }
+
+    [Test("cancelled with no exception and no explanation produces empty errors array")]
+    public async Task CancelledWithNoExceptionNoExplanationProducesEmptyErrorsArray()
+    {
+        await ListenerFixture
+            .Arrange(async listener =>
+            {
+                await listener.ConsumeAsync(StubProducer(), An.Event().Named("test1").CancelledBare(), default);
+            })
+            .Act()
+            .Assert(async root =>
+            {
+                var test = root.Module().Test();
+                await Assert.That(test.State()).IsEqualTo("failed");
+                await Assert.That(test.GetProperty("errors").GetArrayLength()).IsEqualTo(0);
             });
     }
 
@@ -383,27 +467,34 @@ internal sealed class TddGuardListenerTests
     [Test("handles concurrent ConsumeAsync calls safely")]
     public async Task HandlesConcurrentConsumeAsyncCallsSafely()
     {
+        // 16 concurrent callers is enough to reliably trigger a race on unsynchronized
+        // shared state; dedicated threads (rather than Task.Run) avoid ThreadPool
+        // starvation, since the pool's slow-growth policy can stall a large batch of
+        // threads that all block on the barrier before doing any real work.
+        const int concurrentCallers = 16;
         var (listener, readJson, tempDir) = ListenerFixture.Create();
         try
         {
             await listener.OnTestSessionStartingAsync(StubSessionContext());
 
-            using var barrier = new Barrier(100);
-            var tasks = Enumerable.Range(0, 100).Select(i => Task.Run(async () =>
+            using var barrier = new Barrier(concurrentCallers);
+            var threads = Enumerable.Range(0, concurrentCallers).Select(i => new Thread(() =>
             {
                 barrier.SignalAndWait();
-                await listener.ConsumeAsync(
+                listener.ConsumeAsync(
                     StubProducer(),
                     An.Event().Named($"Test_{i}").InFile("/src/Tests.cs").Passed(),
-                    default);
-            }));
-            await Task.WhenAll(tasks);
+                    default).GetAwaiter().GetResult();
+            })).ToList();
+
+            foreach (var thread in threads) thread.Start();
+            foreach (var thread in threads) thread.Join();
 
             await listener.OnTestSessionFinishingAsync(StubSessionContext());
 
             var root = TestJsonAssert.Parse(readJson());
             var tests = root.Module().Tests();
-            await Assert.That(tests.GetArrayLength()).IsEqualTo(100);
+            await Assert.That(tests.GetArrayLength()).IsEqualTo(concurrentCallers);
         }
         finally
         {

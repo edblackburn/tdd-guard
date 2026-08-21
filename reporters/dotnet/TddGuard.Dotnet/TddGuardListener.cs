@@ -12,12 +12,16 @@ namespace TddGuard.Dotnet;
 /// and writes a <c>test.json</c> report when the test session finishes.
 /// Thread-safe: concurrent <see cref="ConsumeAsync"/> calls are supported via <see cref="ConcurrentQueue{T}"/>.
 /// </summary>
-public sealed class TddGuardListener(WriteTestOutput writeOutput) : ITestSessionLifetimeHandler, IDataConsumer, IExtension
+public sealed class TddGuardListener(WriteTestOutput writeOutput, string projectRoot)
+    : ITestSessionLifetimeHandler, IDataConsumer, IExtension
 {
     private ConcurrentQueue<CollectedResult> _results = [];
 
     public string Uid => "TddGuard.Dotnet";
-    public string Version => "1.0.0";
+
+    // Sourced from the MSBuild <Version> in Directory.Build.props (via AssemblyVersion)
+    // so this never drifts from the package version.
+    public string Version => typeof(TddGuardListener).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
     public string DisplayName => "TDD Guard";
     public string Description => "TDD Guard test reporter";
 
@@ -59,18 +63,43 @@ public sealed class TddGuardListener(WriteTestOutput writeOutput) : ITestSession
                 e.Exception is not null ? [new TestEntryError(e.Exception.Message)]
                 : !string.IsNullOrEmpty(e.Explanation) ? [new TestEntryError(e.Explanation)]
                 : []),
+            TimeoutTestNodeStateProperty t => new Core.TestState.Failed(
+                t.Exception is not null ? [new TestEntryError(t.Exception.Message)]
+                : !string.IsNullOrEmpty(t.Explanation) ? [new TestEntryError(t.Explanation)]
+                : []),
+            // MTP0001 deprecates this state for test framework *authors*, directing them
+            // to throw OperationCanceledException instead. As a data consumer we still
+            // receive it from frameworks that have not migrated, and the cancellation
+            // reason is worth surfacing, so it stays explicitly handled.
+#pragma warning disable MTP0001
+            CancelledTestNodeStateProperty c => new Core.TestState.Failed(
+                c.Exception is not null ? [new TestEntryError(c.Exception.Message)]
+                : !string.IsNullOrEmpty(c.Explanation) ? [new TestEntryError(c.Explanation)]
+                : []),
+#pragma warning restore MTP0001
             SkippedTestNodeStateProperty => new Core.TestState.Skipped(),
-            _ => new Core.TestState.Passed(),
+            PassedTestNodeStateProperty => new Core.TestState.Passed(),
+            // Fail closed: any state MTP introduces in the future that we do not
+            // explicitly recognise is treated as a failure, not a silent pass.
+            _ => new Core.TestState.Failed([]),
         };
         var filePath = node.Properties.SingleOrDefault<TestFileLocationProperty>()?.FilePath;
+
+        // Only MSTest, xUnit v3 and TUnit populate this; NUnit and xUnit v2 leave it
+        // absent, in which case the mapper falls back to the display name.
+        var method = node.Properties.SingleOrDefault<TestMethodIdentifierProperty>();
+        var methodIdentifier = method is null
+            ? null
+            : new TestMethodIdentifier(method.Namespace, method.TypeName, method.MethodName);
 
         var input = new TestNodeInput(
             Uid: node.Uid.Value,
             DisplayName: node.DisplayName,
             FilePath: filePath,
-            State: state);
+            State: state,
+            MethodIdentifier: methodIdentifier);
 
-        _results.Enqueue(input.ToCollectedResult());
+        _results.Enqueue(input.ToCollectedResult(projectRoot));
         return Task.CompletedTask;
     }
 }

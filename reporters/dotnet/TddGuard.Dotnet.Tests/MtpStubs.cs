@@ -83,8 +83,31 @@ internal static class MtpStubs
                 MakeTestUpdate(n, new ErrorTestNodeStateProperty(
                     new InvalidOperationException("error state"), "error"), p), true);
 
+        var genTimeout = from n in genName from p in genPath
+            select new TaggedEvent(
+                MakeTestUpdate(n, new TimeoutTestNodeStateProperty(
+                    new InvalidOperationException("timeout state"), "timeout"), p), true);
+
+        var genTimeoutBare = from n in genName from p in genPath
+            select new TaggedEvent(
+                MakeTestUpdate(n, new TimeoutTestNodeStateProperty(), p), true);
+
+        // CancelledTestNodeStateProperty is obsolete but still simulates a test
+        // framework that emits it, exercising the fail-closed catch-all path.
+#pragma warning disable MTP0001
+        var genCancelled = from n in genName from p in genPath
+            select new TaggedEvent(
+                MakeTestUpdate(n, new CancelledTestNodeStateProperty(
+                    new InvalidOperationException("cancelled state"), "cancelled"), p), true);
+
+        var genCancelledBare = from n in genName from p in genPath
+            select new TaggedEvent(
+                MakeTestUpdate(n, new CancelledTestNodeStateProperty(), p), true);
+#pragma warning restore MTP0001
+
         return Gen.OneOf(genPassed, genFailedWithException, genFailedWithExplanation,
-            genFailedBare, genSkipped, genError);
+            genFailedBare, genSkipped, genError, genTimeout, genTimeoutBare,
+            genCancelled, genCancelledBare);
     }
 
     internal sealed class StubTestSessionContext : ITestSessionContext

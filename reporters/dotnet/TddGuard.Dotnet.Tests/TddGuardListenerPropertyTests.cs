@@ -59,14 +59,21 @@ internal sealed class TddGuardListenerPropertyTests
 
         Prop.ForAll(Arb.From(genEvents), events =>
         {
-            // Compute expected module count from the tagged events.
-            // Null file paths fall back to UID as module ID — each is unique per event.
+            // Tests sharing a module ID must collapse into one module. Events with a
+            // file path group by that path; those without (NUnit, xUnit v2) group by
+            // the declaring type derived from the qualified name, so several events
+            // can legitimately share a module.
             var expectedModules = events
-                .Select((e, i) =>
+                .Select(e =>
                 {
                     var node = e.Message.TestNode;
                     var filePath = node.Properties.SingleOrDefault<TestFileLocationProperty>()?.FilePath;
-                    return filePath ?? node.Uid.Value;
+                    if (filePath is not null)
+                        return filePath;
+
+                    var uid = node.Uid.Value;
+                    var lastSeparator = uid.LastIndexOfAny(['.', '/']);
+                    return lastSeparator > 0 ? uid[..lastSeparator] : uid;
                 })
                 .Distinct()
                 .Count();
