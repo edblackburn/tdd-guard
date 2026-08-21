@@ -13,6 +13,24 @@ public delegate string? GetEnvironmentVariable(string name);
 public delegate WriteResult WriteTestOutput(TestRunOutput output);
 
 /// <summary>
+/// Binds a <see cref="WriteTestOutput"/> to the project root the report belongs under.
+/// The root is only known once resolved, so the write is built rather than passed.
+/// </summary>
+public delegate WriteTestOutput OpenTestOutput(string projectRoot);
+
+/// <summary>
+/// Reduces a path to the one name the filesystem knows it by, so that two paths
+/// reaching the same directory through different links compare equal.
+/// </summary>
+public delegate string CanonicalPath(string path);
+
+/// <summary>
+/// Turns a reported test node into the entry the report carries. Bound to the project
+/// root at the composition root, so nothing downstream holds a path.
+/// </summary>
+public delegate CollectedResult MapTestNode(TestNodeInput input);
+
+/// <summary>
 /// Named delegate for retrieving the current working directory.
 /// </summary>
 public delegate string GetCurrentWorkingDirectory();

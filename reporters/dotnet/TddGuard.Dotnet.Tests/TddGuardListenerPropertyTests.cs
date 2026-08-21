@@ -59,21 +59,21 @@ internal sealed class TddGuardListenerPropertyTests
 
         Prop.ForAll(Arb.From(genEvents), events =>
         {
-            // Tests sharing a module ID must collapse into one module. Events with a
-            // file path group by that path; those without (NUnit, xUnit v2) group by
-            // the declaring type derived from the qualified name, so several events
-            // can legitimately share a module.
-            var expectedModules = events
+            // Grouping is what matters, not the module's spelling: events that agree on
+            // where they came from must collapse into one module, and events that differ
+            // must not. Comparing counts rather than names keeps the property independent
+            // of how a path is rendered on the host platform.
+            var distinctOrigins = events
                 .Select(e =>
                 {
                     var node = e.Message.TestNode;
                     var filePath = node.Properties.SingleOrDefault<TestFileLocationProperty>()?.FilePath;
                     if (filePath is not null)
-                        return filePath;
+                        return $"file:{filePath}";
 
                     var uid = node.Uid.Value;
                     var lastSeparator = uid.LastIndexOfAny(['.', '/']);
-                    return lastSeparator > 0 ? uid[..lastSeparator] : uid;
+                    return $"scope:{(lastSeparator > 0 ? uid[..lastSeparator] : uid)}";
                 })
                 .Distinct()
                 .Count();
@@ -81,7 +81,7 @@ internal sealed class TddGuardListenerPropertyTests
             using var result = RunEvents(events);
 
             var moduleCount = result.Output!.Value.GetProperty("testModules").GetArrayLength();
-            return moduleCount == expectedModules;
+            return moduleCount == distinctOrigins;
         }).QuickCheckThrowOnFailure();
     }
 

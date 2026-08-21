@@ -19,8 +19,13 @@ public static class TestRunSummariser
                     TestState.Failed f => new TestEntryOutput(r.Name, r.FullName, "failed",
                         f.Errors.Select(e => new TestEntryErrorOutput(e.Message)).ToList()),
                     TestState.Skipped => new TestEntryOutput(r.Name, r.FullName, "skipped", null),
-                    // Unreachable: TestState is a sealed DU with 3 variants. C# pattern matching
-                    // cannot prove exhaustiveness on sealed abstract records, so this satisfies the compiler.
+                    // Unreachable. TestState's constructor is private and its variants are
+                    // sealed, so no fourth variant can exist, but a private constructor is
+                    // not a sealing mechanism the compiler reasons about: without this arm
+                    // Roslyn reports CS8509 ("the pattern 'not null' is not covered").
+                    // Throwing rather than failing closed is deliberate — unlike MTP's open
+                    // TestNodeStateProperty hierarchy, an unknown value here would be a bug
+                    // in this assembly, not a new state from a test framework.
                     _ => throw new InvalidOperationException($"Unknown TestState: {r.State}")
                 }).ToList()))
             .ToList();

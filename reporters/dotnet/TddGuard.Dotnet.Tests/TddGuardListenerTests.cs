@@ -1,4 +1,5 @@
 using Microsoft.Testing.Platform.Extensions.Messages;
+using TddGuard.Dotnet.Core;
 using static TddGuard.Dotnet.Tests.MtpStubs;
 
 namespace TddGuard.Dotnet.Tests;
@@ -176,6 +177,73 @@ internal sealed class TddGuardListenerTests
             });
     }
 
+    // PropertyBag permits more than one TestFileLocationProperty on a node (unlike state
+    // properties, which it rejects outright). A reporter that asks for exactly one would
+    // throw out of ConsumeAsync on the platform's event pump, losing the whole report —
+    // the false green the fail-closed mapping exists to prevent.
+    [Test("reports a test whose node carries more than one file location")]
+    public async Task ReportsTestWithDuplicateFileLocations()
+    {
+        await ListenerFixture
+            .Arrange(async listener =>
+            {
+                var span = new LinePositionSpan(new LinePosition(1, 0), new LinePosition(1, 0));
+                var node = new TestNode
+                {
+                    Uid = new TestNodeUid("assembly/TestClass/test1"),
+                    DisplayName = "test1",
+                    Properties = new PropertyBag(
+                        new PassedTestNodeStateProperty(),
+                        new TestFileLocationProperty("/src/First.cs", span),
+                        new TestFileLocationProperty("/src/Second.cs", span)),
+                };
+                await listener.ConsumeAsync(StubProducer(), new TestNodeUpdateMessage(default, node), default);
+            })
+            .Act()
+            .Assert(async root =>
+            {
+                await Assert.That(root.Module().Test().State()).IsEqualTo("passed");
+            });
+    }
+
+    [Test("reports a test whose node carries more than one method identifier")]
+    public async Task ReportsTestWithDuplicateMethodIdentifiers()
+    {
+        await ListenerFixture
+            .Arrange(async listener =>
+            {
+                var node = new TestNode
+                {
+                    Uid = new TestNodeUid("assembly/TestClass/test1"),
+                    DisplayName = "test1",
+                    Properties = new PropertyBag(
+                        new PassedTestNodeStateProperty(),
+                        new TestMethodIdentifierProperty(
+                            assemblyFullName: "Acme.Tests",
+                            @namespace: "Acme.Tests",
+                            typeName: "CalculatorTests",
+                            methodName: "First",
+                            methodArity: 0,
+                            parameterTypeFullNames: [],
+                            returnTypeFullName: "System.Void"),
+                        new TestMethodIdentifierProperty(
+                            assemblyFullName: "Acme.Tests",
+                            @namespace: "Acme.Tests",
+                            typeName: "CalculatorTests",
+                            methodName: "Second",
+                            methodArity: 0,
+                            parameterTypeFullNames: [],
+                            returnTypeFullName: "System.Void")),
+                };
+                await listener.ConsumeAsync(StubProducer(), new TestNodeUpdateMessage(default, node), default);
+            })
+            .Act()
+            .Assert(async root =>
+            {
+                await Assert.That(root.Module().Test().State()).IsEqualTo("passed");
+            });
+    }
+
     [Test("uses display name as test name")]
     public async Task UsesDisplayNameAsTestName()
     {
@@ -347,6 +415,33 @@ internal sealed class TddGuardListenerTests
             });
     }
 
+    // The platform recognises an OperationCanceledException carrying the run's own token
+    // and unwinds without faulting the host, which is why the token is observed through
+    // ThrowIfCancellationRequested rather than by constructing the exception directly.
+    [Test("stops consuming once the run is cancelled")]
+    public async Task StopsConsumingOnceRunIsCancelled()
+    {
+        var (listener, _, tempDir) = ListenerFixture.Create();
+        try
+        {
+            using var cancelled = new CancellationTokenSource();
+            await cancelled.CancelAsync();
+
+            await Assert.That(() => listener.ConsumeAsync(
+                    StubProducer(),
+                    An.Event().Named("test1").Passed(),
+                    cancelled.Token))
+                .Throws<OperationCanceledException>();
+
+            await listener.OnTestSessionFinishingAsync(StubSessionContext());
+            await Assert.That(ListenerFixture.HasTestJson(tempDir)).IsFalse();
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+        }
+    }
+
     [Test("clears results between sessions")]
     public async Task ClearsResultsBetweenSessions()
     {
@@ -502,27 +597,87 @@ internal sealed class TddGuardListenerTests
         }
     }
 
-    // Coverage: exercises IExtension property getters (lines 19-26) which are
-    // called by MTP framework via reflection but never by application code.
-    [Test("exposes correct IExtension metadata")]
-    public async Task ExposesCorrectExtensionMetadata()
+    // When both the identifier and the display name look qualified, the display name
+    // wins. The xUnit family qualifies the display name while leaving a digest as the
+    // identifier, so preferring the identifier would report the digest for any
+    // framework whose identifier merely happens to contain a separator.
+    [Test("prefers a qualified display name over a qualified identifier")]
+    public async Task PrefersQualifiedDisplayNameOverQualifiedIdentifier()
+    {
+        await ListenerFixture
+            .Arrange(async listener =>
+            {
+                var node = new TestNode
+                {
+                    Uid = new TestNodeUid("assembly/Opaque/6cdcb5546dc9"),
+                    DisplayName = "Acme.Tests.CalculatorTests.Should_add",
+                    Properties = new PropertyBag(new PassedTestNodeStateProperty()),
+                };
+                await listener.ConsumeAsync(StubProducer(), new TestNodeUpdateMessage(default, node), default);
+            })
+            .Act()
+            .Assert(async root =>
+            {
+                var test = root.Module().Test();
+                await Assert.That(test.FullName()).IsEqualTo("Acme.Tests.CalculatorTests.Should_add");
+                await Assert.That(test.Name()).IsEqualTo("Should_add");
+                await Assert.That(root.Module().ModuleId()).IsEqualTo("Acme.Tests.CalculatorTests");
+            });
+    }
+
+    // A failed write is the one outcome the developer cannot see for themselves: the
+    // hook reads a stale test.json, or none, and the reason has to reach stderr or the
+    // reporter has silently stopped guarding. This drives the real listener and the real
+    // diagnostics decorator, faking only the file write.
+    [Test("reports the reason to the diagnostic log when the report cannot be written")]
+    public async Task ReportsReasonWhenReportCannotBeWritten()
+    {
+        string? captured = null;
+        WriteTestOutput failing = _ => new WriteResult.Error("UnauthorizedAccessException: read-only volume");
+        var listener = new Dotnet.TddGuardListener(
+            failing.WithDiagnostics(msg => captured = msg),
+            input => input.ToCollectedResult("/repo"),
+            version: "0.0.0-test");
+
+        await listener.OnTestSessionStartingAsync(StubSessionContext());
+        await listener.ConsumeAsync(StubProducer(), An.Event().Named("test1").Passed(), default);
+        await listener.OnTestSessionFinishingAsync(StubSessionContext());
+
+        await Assert.That(captured).IsNotNull();
+        await Assert.That(captured!).Contains("test.json");
+        await Assert.That(captured!).Contains("read-only volume");
+    }
+
+    // MTP reads these to identify and route to the extension. The Uid is the platform's
+    // handle for this extension, and a message type missing from DataTypesConsumed is
+    // never delivered — so both are contracts rather than incidental metadata.
+    [Test("identifies itself to the platform and subscribes to test node updates")]
+    public async Task IdentifiesItselfAndSubscribesToTestNodeUpdates()
     {
         var (listener, _, tempDir) = ListenerFixture.Create();
         try
         {
-            await Assert.That(listener.Uid).IsNotNull();
-            await Assert.That(listener.Version).IsNotNull();
-            await Assert.That(listener.DisplayName).IsNotNull();
-            await Assert.That(listener.Description).IsNotNull();
-
-            var enabled = await listener.IsEnabledAsync();
-            await Assert.That(enabled).IsTrue();
-
+            await Assert.That(listener.Uid).IsEqualTo("TddGuard.Dotnet");
             await Assert.That(listener.DataTypesConsumed).Contains(typeof(TestNodeUpdateMessage));
+            await Assert.That(await listener.IsEnabledAsync()).IsTrue();
         }
         finally
         {
             if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
         }
+    }
+
+    // MTP surfaces this in its extension listing. The version is supplied by the
+    // composition root from assembly metadata rather than read here, so the listener
+    // reports whatever it was told.
+    [Test("reports the version it was given")]
+    public async Task ReportsTheVersionItWasGiven()
+    {
+        var listener = new Dotnet.TddGuardListener(
+            _ => new WriteResult.Success(),
+            input => input.ToCollectedResult("/repo"),
+            version: "1.2.3");
+
+        await Assert.That(listener.Version).IsEqualTo("1.2.3");
     }
 }

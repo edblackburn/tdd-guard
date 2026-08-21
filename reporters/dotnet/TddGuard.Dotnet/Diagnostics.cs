@@ -1,6 +1,7 @@
 using OneOf;
+using TddGuard.Dotnet.Core;
 
-namespace TddGuard.Dotnet.Core;
+namespace TddGuard.Dotnet;
 
 /// <summary>
 /// Decorators that add diagnostic logging to core operations.

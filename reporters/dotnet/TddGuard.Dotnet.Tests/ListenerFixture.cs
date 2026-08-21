@@ -105,13 +105,11 @@ internal static class ListenerFixture
         Func<string> ReadTestJson,
         string TempDir);
 
-    internal static ListenerResult Create(
-        GetEnvironmentVariable? getEnv = null,
-        GetCurrentWorkingDirectory? getCwd = null)
+    internal static ListenerResult Create()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
 
-        var listener = CreateListener(tempDir, getEnv, getCwd);
+        var listener = CreateListener(tempDir);
 
         var jsonPath = Path.Combine(
             tempDir, ".claude", "tdd-guard", "data", "test.json");
@@ -128,15 +126,24 @@ internal static class ListenerFixture
     internal static bool HasTestJson(string tempDir)
         => File.Exists(JsonPath(tempDir));
 
-    private static Dotnet.TddGuardListener CreateListener(
-        string tempDir,
-        GetEnvironmentVariable? getEnv = null,
-        GetCurrentWorkingDirectory? getCwd = null)
-    {
-        var root = ProjectRootResolver.Resolve(
-            getEnv ?? (_ => tempDir),
-            getCwd ?? (() => tempDir)).AsT0; // Safe in test harness — always valid
-        var write = ReportFileWriter.Create(root.Path);
-        return new Dotnet.TddGuardListener(write, root.Path);
-    }
+    /// <summary>
+    /// Builds a listener that writes its report beneath <paramref name="tempDir"/>.
+    /// A stub write stands in for the real file writer so these tests exercise the
+    /// listener alone; the writer has its own tests, and where the report lands is
+    /// decided at registration (see <see cref="ProjectRootResolutionTests"/>).
+    /// </summary>
+    private static Dotnet.TddGuardListener CreateListener(string tempDir)
+        => new(
+            WriteBeneath(tempDir),
+            input => input.ToCollectedResult(tempDir),
+            version: "0.0.0-test");
+
+    private static WriteTestOutput WriteBeneath(string projectRoot)
+        => output =>
+        {
+            var path = JsonPath(projectRoot);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, output.Serialize());
+            return new WriteResult.Success();
+        };
 }

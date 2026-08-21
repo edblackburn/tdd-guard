@@ -4,41 +4,52 @@ namespace TddGuard.Dotnet.Tests;
 
 /// <summary>
 /// Test Data Builder for <see cref="TestNodeInput"/>, the Core-facing shape the
-/// listener produces from an MTP test node.
+/// listener produces once it has classified a test node.
 /// Entry point: <c>An.Node()</c>
 /// </summary>
 internal sealed class TestNodeInputBuilder
 {
-    private string _uid = "assembly/Class/Method";
-    private string _displayName = "Method";
+    private TestIdentity _identity = new TestIdentity.Structured("Acme.Tests", "WidgetTests", "Should_add");
     private string? _filePath = "/repo/tests/Default.cs";
-    private TestMethodIdentifier? _methodIdentifier;
     private Core.TestState _state = new Core.TestState.Passed();
 
-    internal TestNodeInputBuilder WithUid(string uid)
+    /// <summary>The framework described the declaring method (MSTest, xUnit v3, TUnit).</summary>
+    internal TestNodeInputBuilder DescribedBy(string @namespace, string typeName, string methodName)
     {
-        _uid = uid;
+        _identity = new TestIdentity.Structured(@namespace, typeName, methodName);
         return this;
     }
 
-    internal TestNodeInputBuilder WithDisplayName(string displayName)
+    /// <summary>The framework qualified the display name (xUnit v2).</summary>
+    internal TestNodeInputBuilder NamedBy(string qualifiedName)
     {
-        _displayName = displayName;
+        _identity = new TestIdentity.QualifiedName(qualifiedName);
         return this;
     }
 
-    internal TestNodeInputBuilder WithFilePath(string? filePath)
+    /// <summary>The framework qualified the node identifier instead (NUnit).</summary>
+    internal TestNodeInputBuilder IdentifiedBy(string qualifiedIdentifier, string memberName)
+    {
+        _identity = new TestIdentity.QualifiedIdentifier(qualifiedIdentifier, memberName);
+        return this;
+    }
+
+    /// <summary>The framework supplied nothing qualified — a digest or a bare label.</summary>
+    internal TestNodeInputBuilder Unqualified(string value)
+    {
+        _identity = new TestIdentity.Unqualified(value);
+        return this;
+    }
+
+    internal TestNodeInputBuilder InFile(string? filePath)
     {
         _filePath = filePath;
         return this;
     }
 
-    internal TestNodeInputBuilder WithMethodIdentifier(
-        string @namespace,
-        string typeName,
-        string methodName)
+    internal TestNodeInputBuilder WithNoFile()
     {
-        _methodIdentifier = new TestMethodIdentifier(@namespace, typeName, methodName);
+        _filePath = null;
         return this;
     }
 
@@ -48,6 +59,5 @@ internal sealed class TestNodeInputBuilder
         return this;
     }
 
-    internal TestNodeInput Build()
-        => new(_uid, _displayName, _filePath, _state, _methodIdentifier);
+    internal TestNodeInput Build() => new(_identity, _filePath, _state);
 }

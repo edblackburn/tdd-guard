@@ -1,100 +1,85 @@
 namespace TddGuard.Dotnet.Core;
 
 /// <summary>
-/// Maps raw MTP test node input into a <see cref="CollectedResult"/>.
+/// Maps a classified test node into a <see cref="CollectedResult"/>.
 /// <para>
-/// MTP test node UIDs are framework-defined and opaque in several cases: MSTest
-/// emits a GUID, xUnit v3 a SHA-256, xUnit v2 a SHA-1. They are therefore unusable
-/// as a human-readable identifier, so the full name is derived from the structured
-/// method identifier where the framework supplies one, falling back to the display
-/// name (already fully qualified for the xUnit family) and only then to the UID.
-/// </para>
-/// <para>
-/// Module IDs are reported relative to the project root so they match the other
-/// TDD Guard reporters and stay stable across machines. Frameworks that supply no
-/// file location (NUnit, xUnit v2) group by declaring type instead, which keeps
-/// modules meaningful rather than keying each test to its own digest.
+/// Every name is derived from the <see cref="TestIdentity"/> case, so each framework
+/// shape is handled by an arm the compiler checks rather than by inspecting string
+/// punctuation. Module IDs are reported relative to the project root to match the
+/// other TDD Guard reporters and stay stable across machines, falling back to the
+/// declaring type when the framework reports no file.
 /// </para>
 /// </summary>
 public static class TestNodeMapper
 {
     public static CollectedResult ToCollectedResult(this TestNodeInput input, string projectRoot)
     {
-        var fullName = ResolveFullName(input);
-        var moduleId = ResolveModuleId(input, projectRoot, fullName);
-        var name = ResolveName(input);
+        var fullName = FullName(input.Identity);
 
-        return new CollectedResult(name, fullName, moduleId, input.State);
+        return new CollectedResult(
+            Name: MemberName(input.Identity),
+            FullName: fullName,
+            ModuleId: ModuleId(input, projectRoot, fullName),
+            State: input.State);
     }
 
-    /// <summary>
-    /// The short, per-test name. The other TDD Guard reporters report the bare
-    /// method name here, but xUnit sets the display name to the fully qualified
-    /// name, so the structured identifier takes precedence when available.
-    /// </summary>
-    private static string ResolveName(TestNodeInput input)
-    {
-        if (input.MethodIdentifier is { MethodName.Length: > 0 } id)
-            return id.MethodName;
-
-        // xUnit v2 supplies no identifier, only a dotted fully qualified display
-        // name, so the trailing segment is the nearest thing to a method name.
-        // Frameworks whose display names are prose (containing spaces) are left
-        // alone, since a dot there is punctuation rather than a namespace separator.
-        var displayName = input.DisplayName;
-        if (!displayName.Contains(' ', StringComparison.Ordinal))
+    /// <summary>The fully qualified name, as far as the framework supplied one.</summary>
+    private static string FullName(TestIdentity identity)
+        => identity switch
         {
-            var lastDot = displayName.LastIndexOf('.');
-            if (lastDot > 0 && lastDot < displayName.Length - 1)
-                return displayName[(lastDot + 1)..];
-        }
-
-        return displayName;
-    }
-
-    private static string ResolveFullName(TestNodeInput input)
-    {
-        if (input.MethodIdentifier is { } id)
-            return Qualify(id.Namespace, id.TypeName, id.MethodName);
-
-        // Without a method identifier the framework leaves only the UID and the
-        // display name, and which one is qualified varies: xUnit puts the fully
-        // qualified name in the display name and a digest in the UID, while NUnit
-        // does the opposite. Prefer whichever already looks qualified, treating a
-        // digest as unqualified because it carries no separator.
-        var uid = input.Uid;
-        var displayName = input.DisplayName;
-
-        if (IsQualified(displayName))
-            return displayName;
-
-        if (IsQualified(uid))
-            return uid;
-
-        return !string.IsNullOrEmpty(displayName) ? displayName : uid;
-    }
+            TestIdentity.Structured s => Qualify(s.Namespace, s.TypeName, s.MethodName),
+            TestIdentity.QualifiedName q => q.Value,
+            TestIdentity.QualifiedIdentifier q => q.Value,
+            TestIdentity.Unqualified u => u.Value,
+            // Unreachable: TestIdentity's constructor is private and its variants are
+            // sealed. See TestRunSummariser for why the arm is still required.
+            _ => throw new InvalidOperationException($"Unknown TestIdentity: {identity}"),
+        };
 
     /// <summary>
-    /// Treats a name as qualified when it carries a namespace-style or path-style
-    /// separator. Opaque UIDs (GUIDs, SHA digests) have none and are rejected.
+    /// The short, per-test name. The other TDD Guard reporters report the bare member
+    /// name here, so a qualified name is reduced to its last segment.
     /// </summary>
-    private static bool IsQualified(string value)
-        => value.Contains('.', StringComparison.Ordinal)
-            || value.Contains('/', StringComparison.Ordinal);
+    private static string MemberName(TestIdentity identity)
+        => identity switch
+        {
+            TestIdentity.Structured s => s.MethodName,
+            TestIdentity.QualifiedName q => LastSegment(q.Value),
+            TestIdentity.QualifiedIdentifier q => q.MemberName,
+            TestIdentity.Unqualified u => u.Value,
+            _ => throw new InvalidOperationException($"Unknown TestIdentity: {identity}"),
+        };
 
-    private static string ResolveModuleId(TestNodeInput input, string projectRoot, string fullName)
+    /// <summary>
+    /// Groups tests by source file when the framework reports one. Otherwise groups by
+    /// declaring type, so sibling tests still share a module rather than each becoming
+    /// a module of its own.
+    /// </summary>
+    private static string ModuleId(TestNodeInput input, string projectRoot, string fullName)
     {
         if (!string.IsNullOrEmpty(input.FilePath))
             return Relativize(input.FilePath, projectRoot);
 
-        if (input.MethodIdentifier is { } id)
-            return Qualify(id.Namespace, id.TypeName);
+        return input.Identity switch
+        {
+            TestIdentity.Structured s => Qualify(s.Namespace, s.TypeName),
+            _ => DeclaringScope(fullName),
+        };
+    }
 
-        // Last resort: strip the trailing member from the resolved full name so
-        // sibling tests still share a module. Falls back to the whole name when
-        // there is nothing to strip.
+    /// <summary>Everything before the final separator, or the whole name if there is none.</summary>
+    private static string DeclaringScope(string fullName)
+    {
         var lastSeparator = fullName.LastIndexOfAny(['.', '/']);
         return lastSeparator > 0 ? fullName[..lastSeparator] : fullName;
+    }
+
+    private static string LastSegment(string value)
+    {
+        var lastSeparator = value.LastIndexOfAny(['.', '/']);
+        return lastSeparator >= 0 && lastSeparator < value.Length - 1
+            ? value[(lastSeparator + 1)..]
+            : value;
     }
 
     private static string Qualify(params string[] parts)

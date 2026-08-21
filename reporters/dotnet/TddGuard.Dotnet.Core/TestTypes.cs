@@ -13,28 +13,51 @@ public abstract record TestState
 }
 
 /// <summary>Error message captured from a failed test assertion or exception.</summary>
-public record TestEntryError(string Message);
+public sealed record TestEntryError(string Message);
 
 /// <summary>
-/// The declaring location of a test method, as reported by the test framework.
-/// Frameworks differ in what they supply: MSTest, xUnit v3 and TUnit populate this,
-/// while NUnit and xUnit v2 do not.
+/// How a test framework named a test, classified at the point the report is received.
+/// <para>
+/// Frameworks disagree sharply about where the usable name lives. Some describe the
+/// declaring method outright; the rest leave only two strings, one of which is an
+/// opaque digest, and which one carries the name differs between them. Naming the
+/// four shapes here means the ambiguity is resolved once, against the framework's
+/// own metadata, rather than re-inferred from string punctuation wherever a name
+/// is needed.
+/// </para>
 /// </summary>
-public record TestMethodIdentifier(string Namespace, string TypeName, string MethodName);
+public abstract record TestIdentity
+{
+    private TestIdentity() { }
+
+    /// <summary>The framework described the declaring method.</summary>
+    public sealed record Structured(string Namespace, string TypeName, string MethodName) : TestIdentity;
+
+    /// <summary>
+    /// No method description, but the fully qualified name is the display name.
+    /// </summary>
+    public sealed record QualifiedName(string Value) : TestIdentity;
+
+    /// <summary>
+    /// No method description, but the fully qualified name is the node identifier,
+    /// leaving the display name as the bare member name.
+    /// </summary>
+    public sealed record QualifiedIdentifier(string Value, string MemberName) : TestIdentity;
+
+    /// <summary>
+    /// Nothing qualified was supplied — typically only a digest or a bare label.
+    /// </summary>
+    public sealed record Unqualified(string Value) : TestIdentity;
+}
 
 /// <summary>
 /// Raw input from the MTP test node, before module grouping.
 /// Decoupled from MTP types so Core has no platform dependency.
 /// </summary>
-public record TestNodeInput(
-    string Uid,
-    string DisplayName,
-    string? FilePath,
-    TestState State,
-    TestMethodIdentifier? MethodIdentifier = null);
+public sealed record TestNodeInput(TestIdentity Identity, string? FilePath, TestState State);
 
 /// <summary>
 /// Processed test result after UID parsing and module assignment.
 /// Produced by <see cref="TestNodeMapper.ToCollectedResult"/>.
 /// </summary>
-public record CollectedResult(string Name, string FullName, string ModuleId, TestState State);
+public sealed record CollectedResult(string Name, string FullName, string ModuleId, TestState State);

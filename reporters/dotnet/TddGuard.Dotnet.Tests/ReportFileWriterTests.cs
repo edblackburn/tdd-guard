@@ -70,6 +70,39 @@ internal sealed class ReportFileWriterTests
         });
     }
 
+    // Two test processes can share a project root — a multi-targeted test project, or
+    // several test projects in one solution. A temp file named only after the target
+    // would have them writing and renaming the same path, so one run's report can be
+    // truncated or lost. Concurrent writers must each land a complete file.
+    [Test("survives concurrent writers sharing a project root")]
+    public async Task SurvivesConcurrentWritersSharingProjectRoot()
+    {
+        await TempDir.Run(async tempDir =>
+        {
+            const int writers = 8;
+            var write = ReportFileWriter.Create(tempDir);
+
+            using var barrier = new Barrier(writers);
+            var results = new WriteResult[writers];
+            var threads = Enumerable.Range(0, writers).Select(i => new Thread(() =>
+            {
+                barrier.SignalAndWait();
+                results[i] = write(MakeOutputWithReason(i % 2 == 0 ? "passed" : "failed"));
+            })).ToList();
+
+            foreach (var thread in threads) thread.Start();
+            foreach (var thread in threads) thread.Join();
+
+            await Assert.That(results).All().Satisfy(r => r.IsTypeOf<WriteResult.Success>());
+
+            // Whichever writer landed last, the file must be complete and parseable.
+            var path = Path.Combine(tempDir, ".claude", "tdd-guard", "data", "test.json");
+            var json = await File.ReadAllTextAsync(path);
+            await Assert.That(json).Contains("\"testModules\"");
+            await Assert.That(() => System.Text.Json.JsonDocument.Parse(json)).ThrowsNothing();
+        });
+    }
+
     private static TestRunOutput MakePassingOutput()
         => MakeOutputWithReason("passed");
 
